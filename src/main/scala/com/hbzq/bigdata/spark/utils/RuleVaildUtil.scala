@@ -22,6 +22,8 @@ object RuleVaildUtil {
     this.inited = true
   }
 
+
+
   /**
     *
     * 获取指定规则下的  分类列表
@@ -38,10 +40,9 @@ object RuleVaildUtil {
     *
     * @param t
     * @param ruleName
-    * @tparam T
     * @return
     */
-  def matchClassify[T <: BaseRecord](t: T, ruleName: String): String = {
+  def matchClassify(t: BaseRecord, ruleName: String): String = {
     Preconditions.checkArgument(inited, "rules not be inited,please load rules before vaild...", None)
     val classifyRule = getClassifyListByRuleName(ruleName)
     t.matchClassify(classifyRule)

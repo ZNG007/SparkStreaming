@@ -41,6 +41,9 @@ trait BaseRecord {
     classify
   }
 
+  val ru = scala.reflect.runtime.universe
+  val mirror = ru.runtimeMirror(getClass().getClassLoader)
+
   /**
     * 反射机制  根据字段名称获取字段值
     *
@@ -48,13 +51,14 @@ trait BaseRecord {
     * @return
     */
   def getFieldValueByName(name: String): String = {
-    val ru = scala.reflect.runtime.universe
-    val mirror = ru.runtimeMirror(this.getClass.getClassLoader)
+
     val instanceMirror = mirror.reflect(this)
-    val nameField = ru.typeOf[TsswtRecord].decl(ru.TermName(name)).asTerm
+    val nameField = ru.typeOf[TdrwtRecord].decl(ru.TermName(name)).asTerm
     instanceMirror.reflectField(nameField).get.toString
   }
 }
 
-// TDRWT
-case class TsswtRecord(var wtgy: String, var wtfs: String) extends BaseRecord
+// TDRWT   "KHH","WTH","YYB","WTFS", "WTGY", "CJJE","BZ","CXWTH","CLASSIFY"
+case class TdrwtRecord(var khh: String, var wth: String
+                       ,var yyb:String,var wtfs:String,var wtgy: String,
+                       var cjje:String,var bz:String,var cxwth:String,var channel:String="其他") extends BaseRecord
