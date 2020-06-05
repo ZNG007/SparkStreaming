@@ -30,6 +30,8 @@ object Constants {
   val KAFKA_BOOTSTRAP_SERVERS="kafka.bootstrap.servers"
   val KAFKA_GROUP_ID="kafka.group.id"
   val KAFKA_AUTO_OFFSET_RESET="kafka.auto.offset.reset"
+  val KAFKA_MYSQL_QUERY_OFFSET_SQL="kafka.mysql.query.offset.sql"
+  val KAFKA_MYSQL_INSERT_OFFSET_SQL="kafka.mysql.insert.offset.sql"
   // Redis
   val REDIS_HOSTS = "redis.hosts"
   val REDIS_MASTER = "redis.master"
@@ -50,6 +52,7 @@ object Constants {
   // exchange rate sql
   val DIM_EXCHANGE_RATE_SQL = "dim.exchange.rate.sql"
   val FLUSH_REDIS_TO_MYSQL_TRADE_STATE_SQL = "flush.redis.to.mysql.trade.state.sql"
+  val FLUSH_REDIS_TO_MYSQL_TRADE_STATE_KHH_SQL = "flush.redis.to.mysql.trade.state.khh.sql"
   val FLUSH_REDIS_TO_MYSQL_JYJ_STATE_SQL = "flush.redis.to.mysql.jyj.state.sql"
   val FLUSH_REDIS_TO_MYSQL_OTHER_STATE_SQL = "flush.redis.to.mysql.other.state.sql"
 

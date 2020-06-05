@@ -4,6 +4,7 @@ import java.io.File
 
 import com.hbzq.bigdata.spark.config.Constants
 import com.hbzq.bigdata.spark.domain._
+import com.hbzq.bigdata.spark.operator.rdd.{TdrzjmxOperator, TkhxxOperator}
 import com.owlike.genson.defaultGenson._
 import org.apache.commons.io.FileUtils
 import org.apache.commons.lang.StringUtils
@@ -24,6 +25,8 @@ import scala.reflect.runtime.universe._
 object JsonUtil {
 
   private[this] val logger = Logger.getLogger(JsonUtil.getClass)
+
+
 
   /**
     * 读取Json文件获取
@@ -109,12 +112,24 @@ object JsonUtil {
     if(!"TKHXX".equalsIgnoreCase(tableName) || !"INSERT".equalsIgnoreCase(op) || after.isEmpty){
       return null
     }
-    // CUSTOMER.TKHXX  KHH, KHRQ, JGBZ
-   TkhxxRecord(
-     after.get("KHH").getOrElse(""),
-     after.get("KHRQ").getOrElse("0").toInt,
-     after.get("JGBZ").getOrElse("-1").toInt
-    )
+    val jgbz = after.get("JGBZ").getOrElse("-1").toInt
+    jgbz match {
+      case 0 => TkhxxRecord(
+        after.get("KHH").getOrElse(""),
+        after.get("KHRQ").getOrElse("0").toInt,
+        TkhxxOperator.GR
+      )
+      case 1 => TkhxxRecord(
+        after.get("KHH").getOrElse(""),
+        after.get("KHRQ").getOrElse("0").toInt,
+        TkhxxOperator.JG
+      )
+      case _ => TkhxxRecord(
+        after.get("KHH").getOrElse(""),
+        after.get("KHRQ").getOrElse("0").toInt,
+        TkhxxOperator.QT
+      )
+    }
   }
 
   /**
@@ -153,15 +168,32 @@ object JsonUtil {
       return null
     }
 
-    // TDRZJMX KHH,LSH,YWKM,BZ,SRJE,FCJE
-    TdrzjmxRecord(
-      after.get("KHH").getOrElse(""),
-      after.get("LSH").getOrElse(""),
-      after.get("YWKM").getOrElse(""),
-      after.get("BZ").getOrElse(""),
-      BigDecimal(after.get("SRJE").getOrElse("0")),
-      BigDecimal(after.get("FCJE").getOrElse("0"))
-    )
+    val srje = BigDecimal(after.get("SRJE").getOrElse("0"))
+    val fcje = BigDecimal(after.get("FCJE").getOrElse("0"))
+
+    val ywkm = after.get("YWKM").getOrElse("")
+
+    if(TdrzjmxOperator.TDRZJMX_SR_YWKM_LIST.contains(ywkm)){
+      TdrzjmxRecord(
+        after.get("KHH").getOrElse(""),
+        after.get("LSH").getOrElse(""),
+        after.get("YWKM").getOrElse(""),
+        after.get("BZ").getOrElse(""),
+        TdrzjmxOperator.ZJZR,
+        srje
+      )
+    }else if(TdrzjmxOperator.TDRZJMX_FC_YWKM_LIST.contains(ywkm)){
+      TdrzjmxRecord(
+        after.get("KHH").getOrElse(""),
+        after.get("LSH").getOrElse(""),
+        after.get("YWKM").getOrElse(""),
+        after.get("BZ").getOrElse(""),
+        TdrzjmxOperator.ZJZC,
+        fcje
+      )
+    }else{
+      null
+    }
   }
 
   /**

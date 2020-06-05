@@ -150,7 +150,7 @@ object ConfigurationManager {
     var rules: Map[String, Map[String, List[Map[String, List[String]]]]] = Map()
     ConfigurationManager.getProperty(Constants.RULES_LIST).split(",").foreach(
       ruleName => {
-        val rule = JsonUtil.parseRuleFile(s"""$ruleName.json""")
+        val rule = JsonUtil.parseRuleFile(s"""E:\\scalaProjects\\realtime-trade-monitor\\src\\main\\resources\\$ruleName.json""")
         rules += (ruleName -> rule)
       }
     )

@@ -2,6 +2,7 @@ package com.hbzq.bigdata.spark.utils
 
 import com.hbzq.bigdata.spark.config.{ConfigurationManager, Constants}
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.common.TopicPartition
 import org.apache.log4j.Logger
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.SparkSession
@@ -9,8 +10,8 @@ import org.apache.spark.streaming.dstream.{DStream, InputDStream}
 import org.apache.spark.streaming.kafka010.{ConsumerStrategies, KafkaUtils}
 import org.apache.spark.streaming.kafka010.LocationStrategies.PreferConsistent
 import org.apache.spark.streaming.{Seconds, StreamingContext}
-import scala.collection.JavaConverters._
 
+import scala.collection.JavaConverters._
 
 
 /**
@@ -33,6 +34,7 @@ object SparkUtil {
   def getSparkStreamingRunTime(duration: Int): (SparkContext, SparkSession, StreamingContext) = {
     val spark = SparkSession
       .builder
+      .master("local[10]")
       .enableHiveSupport()
       .getOrCreate()
     val conf = spark.sparkContext.getConf
@@ -61,6 +63,34 @@ object SparkUtil {
   }
 
   /**
+    * offset 信息保存在Mysql
+    *
+    * @param ssc
+    * @param topics
+    * @param kafkaParams
+    * @return
+    */
+  def getInputStreamFromKafkaByMysqlOffset(ssc: StreamingContext,
+                                           topics: Array[String],
+                                           kafkaParams: Map[String, Object]): InputDStream[ConsumerRecord[String, String]] = {
+    // begin from the the offsets committed to the database
+    val offsets = MysqlJdbcUtil.executeQuery(ConfigurationManager.getProperty(Constants.KAFKA_MYSQL_QUERY_OFFSET_SQL)
+      , List(ConfigurationManager.getProperty(Constants.KAFKA_GROUP_ID)))
+    val fromOffsets = offsets.map(rs =>
+      new TopicPartition(rs.getString(1), rs.getInt(2)) -> rs.getLong(3)).toMap
+    if (fromOffsets.isEmpty) {
+      getInputStreamFromKafka(ssc, topics, kafkaParams)
+    } else {
+      KafkaUtils.createDirectStream[String, String](
+        ssc,
+        PreferConsistent,
+        ConsumerStrategies.Assign[String, String](fromOffsets.keys.toList, kafkaParams, fromOffsets)
+      )
+    }
+
+  }
+
+  /**
     * 获取汇率信息
     *
     * @param spark
@@ -75,10 +105,10 @@ object SparkUtil {
       })
     logger.warn(
       s"""
-        |========
-        |ExchangeRateFromHive
-        |$res
-        |========
+         |========
+         |ExchangeRateFromHive
+         |$res
+         |========
       """.stripMargin)
     res
   }

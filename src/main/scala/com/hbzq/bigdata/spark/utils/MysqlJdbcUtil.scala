@@ -32,17 +32,19 @@ object MysqlJdbcUtil {
     initState = true
   }
 
+  init()
+
   /**
     * 执行查询操作
     *
     * @param sql
     * @return
     */
-  def executeQuery(sql: String): List[Row] = {
+  def executeQuery(sql: String, params: List[Any]): List[Row] = {
     if (!initState) init()
     try {
       DB.readOnly { implicit session =>
-        SQL(sql).map(rs => Row(rs.toMap().values)).list.apply()
+        SQL(sql).bind(params: _*).map(rs => Row(rs.toMap().values)).list.apply()
       }
     } catch {
       case ex: Exception => {
@@ -92,4 +94,5 @@ object MysqlJdbcUtil {
       }
     }
   }
+
 }
