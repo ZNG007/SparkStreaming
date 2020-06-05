@@ -1,17 +1,17 @@
 package com.hbzq.bigdata.spark
 
-import java.time.{LocalDate, LocalDateTime}
-import java.util.concurrent.TimeUnit
+import java.time.LocalDateTime
+import java.util.concurrent.{ScheduledExecutorService, TimeUnit}
 
 import com.hbzq.bigdata.spark.config.{ConfigurationManager, Constants}
-import com.hbzq.bigdata.spark.domain.TdrwtRecord
-import java.nio.charset.Charset
-
-import com.google.common.hash.{BloomFilter, Funnels}
-import com.hbzq.bigdata.spark.utils.{JsonUtil, RuleVaildUtil}
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.util.StringUtils
-import org.apache.spark.sql.streaming.{GroupState, GroupStateTimeout, Trigger}
+import com.hbzq.bigdata.spark.operator.rdd._
+import com.hbzq.bigdata.spark.operator.runnable.{FlushRedisToMysqlTask, RedisDelKeyTask}
+import com.hbzq.bigdata.spark.utils._
+import org.apache.commons.lang.StringUtils
+import org.apache.log4j.Logger
+import org.apache.spark.storage.StorageLevel
+import org.apache.spark.streaming.StreamingContext
+import org.apache.spark.streaming.kafka010._
 
 
 /**
@@ -25,89 +25,103 @@ import org.apache.spark.sql.streaming.{GroupState, GroupStateTimeout, Trigger}
   *
   */
 object RealTimeTradeMonitor {
+  private[this] val logger = Logger.getLogger(RealTimeTradeMonitor.getClass)
+
   def main(args: Array[String]): Unit = {
 
-    ConfigurationManager.initConfig("E:\\scalaProjects\\realtime-trade-monitor\\src\\main\\resources\\config.properties")
-    var rules: Map[String, Map[String, List[Map[String, List[String]]]]] = Map()
-    ConfigurationManager.getProperty(Constants.RULES_LIST).split(",").foreach(
-      ruleName => {
-        val rule = JsonUtil.parseRuleFile(s"""E:\scalaProjects\realtime-trade-monitor\src\main\resources\$ruleName.json""")
-        rules += (ruleName -> rule)
-      }
+    // 获取Kafka配置
+    var (topics, kafkaParams) = ConfigurationManager.getKafkaConfig()
+    var ssc: StreamingContext = startApp(topics, kafkaParams)
+    if (!ssc.awaitTerminationOrTimeout(DateUtil.getDurationTime())) {
+      logger.warn(
+        s"""
+           |====================
+           |Begin to stop APP
+           |${LocalDateTime.now()}
+           |====================
+        """.stripMargin)
+      ssc.stop(true, true)
+    }
+  }
+
+  /**
+    * 启动Sparkr任务
+    *
+    * @param topics
+    * @param kafkaParams
+    * @return
+    */
+  private def startApp(topics: Array[String], kafkaParams: Map[String, Object]): StreamingContext = {
+    // 获取spark运行时环境
+    var (sparkContext, spark, ssc) = SparkUtil.getSparkStreamingRunTime(ConfigurationManager.getInt(Constants.SPARK_BATCH_DURATION))
+    // 获取汇率表
+    val exchangeMap = SparkUtil.getExchangeRateFromHive(spark)
+    //    val exchangeMap: Map[String, BigDecimal] = Map()
+    // 广播变量
+    val exchangeMapBC = sparkContext.broadcast(exchangeMap)
+    // 开启调度任务
+    startScheduleTask()
+    // begin from the the offsets committed to the database
+    /*val offsets = MysqlJdbcUtil.executeQuery(s"""select topic,partition,offset from test.offset where group_id=${kafkaParams.get("group.id").get}""")
+    val fromOffsets = offsets.map(rs =>
+      new TopicPartition(rs.getString(1), rs.getInt(2)) -> rs.getLong(3)).toMap
+    val input = KafkaUtils.createDirectStream[String, String](
+       ssc,
+       PreferConsistent,
+       ConsumerStrategies.Assign[String, String](fromOffsets.keys.toList, kafkaParams, fromOffsets)
+     )*/
+
+    val inputStream = SparkUtil.getInputStreamFromKafka(ssc, topics, kafkaParams)
+
+    inputStream.foreachRDD(rdd => {
+      val offsetRanges = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
+      rdd.repartition(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM))
+      // 提前过滤  只关心INSERT操作
+      val inputRdd = rdd.filter(message => {
+        val value = message.value()
+        StringUtils.isNotEmpty(value) && (value.contains("INSERT"))
+      })
+        .map(_.value())
+      // 持久化
+      inputRdd.persist(StorageLevel.MEMORY_AND_DISK)
+      // 计算委托相关的业务 委托笔数  委托金额  委托客户数
+      TdrwtOperator(inputRdd, exchangeMapBC).compute()
+      // 计算成交相关的业务 成交笔数  成交金额  成交客户数
+      TsscjOperator(inputRdd, exchangeMapBC).compute()
+      // 新增客户数
+      TkhxxOperator(inputRdd).compute()
+      // 计算净佣金
+      TjgmxlsOperator(inputRdd).compute()
+      // 计算客户转入转出
+      TdrzjmxOperator(inputRdd, exchangeMapBC).compute()
+      // 先测试提交给kafka
+      inputStream.asInstanceOf[CanCommitOffsets].commitAsync(offsetRanges)
+    })
+    ssc.start()
+    ssc
+  }
+
+  /**
+    * 调度任务
+    *
+    * @return
+    */
+  private def startScheduleTask(): ScheduledExecutorService = {
+    // 初始化Redis 删除Key调度线程池
+    val scheduler = ThreadUtil.getSingleScheduleThreadPool(2)
+    // 定期清除Redis中的key
+    scheduler.scheduleWithFixedDelay(new RedisDelKeyTask(),
+      0,
+      ConfigurationManager.getInt(Constants.REDIS_KEY_DEL_SCHEDULE_INTERVAL),
+      TimeUnit.SECONDS
+    )
+    // Mysql数据同步调度线程池
+    scheduler.scheduleWithFixedDelay(new FlushRedisToMysqlTask(),
+      60,
+      ConfigurationManager.getInt(Constants.FLUSH_REDIS_TO_MYSQL_SCHEDULE_INTERVAL),
+      TimeUnit.SECONDS
     )
 
-    val spark = SparkSession
-      .builder
-      .master("local[2]")
-      .appName("RealTimeTradeMonitor")
-      .getOrCreate()
-
-    spark.sparkContext.setLogLevel("WARN")
-
-    val rulesbroadcast = spark.sparkContext.broadcast(rules)
-
-    import spark.implicits._
-
-    val df = spark
-      .readStream
-      .format("kafka")
-      .option("kafka.bootstrap.servers", "10.105.1.172:9092")
-      .option("subscribe", "orac2kafka2")
-      .load()
-
-    df.cache()
-
-    val res = df.filter(row => {
-      val value = row.getAs[String]("value")
-      val tableNameAndOp = JsonUtil.getTableNameAndOperatorFromKakfaRecord(value)
-      tableNameAndOp._1.equalsIgnoreCase("TDRWT") && tableNameAndOp._2.equalsIgnoreCase("UPDATE")
-    }).map(row => {
-      val value = row.getAs[String]("value")
-      RuleVaildUtil.init(rulesbroadcast.value)
-      JsonUtil.parseKakfaRecordToTdrwtRecord(value)
-    }).filter(record => {
-      record.cxwth == "" && record.khh != ""
-    }).groupByKey(row => row.channel).mapGroupsWithState[(Long, Long, BigDecimal, LocalDate,BloomFilter[CharSequence]), (String, Long, Long, BigDecimal)] {
-      (key:String, iter:Iterator[TdrwtRecord], state:GroupState[(Long, Long, BigDecimal, LocalDate,BloomFilter[CharSequence])]) => {
-        val now = LocalDate.now()
-
-        // 清除不是当天的状态
-        if (state.exists && now.isEqual(state.get._4)) {
-          state.remove()
-        }
-
-        if (!state.exists) {
-          val b = BloomFilter.create(Funnels.stringFunnel(Charset.forName("utf-8")), 800000, 0.00001)
-          state.update((0L, 0L, BigDecimal("0"), LocalDate.now(),b))
-        }
-
-        val curState = state.get
-        var customNum = state.get._1
-        var wtNum = state.get._2
-        var wtCount = state.get._3
-        val fliter = state.get._5
-
-        while (iter.hasNext) {
-          val record = iter.next()
-          if(!fliter.mightContain(record.khh)){
-            customNum += 1
-            fliter.put(record.khh)
-          }
-          wtNum+= 1
-          wtCount += BigDecimal(record.cjje)
-        }
-        state.update((customNum,wtNum,wtCount,now,fliter))
-        (key, customNum, wtNum, wtCount)
-      }
-    }
-
-
-    val query = res.writeStream
-      .trigger(Trigger.ProcessingTime(5, TimeUnit.SECONDS))
-      .outputMode("update")
-      .format("console")
-      .start()
-
-    query.awaitTermination()
+    scheduler
   }
 }

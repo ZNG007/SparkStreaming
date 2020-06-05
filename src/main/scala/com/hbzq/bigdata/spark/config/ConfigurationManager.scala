@@ -1,7 +1,11 @@
 package com.hbzq.bigdata.spark.config
 
-import java.io.{FileInputStream, IOException}
+import java.io.{FileInputStream, IOException, InputStream}
 import java.util.Properties
+
+import com.hbzq.bigdata.spark.utils.JsonUtil
+import org.apache.kafka.common.serialization.StringDeserializer
+
 
 /**
   * describe:
@@ -23,9 +27,9 @@ object ConfigurationManager {
     * @return
     */
   def initConfig(fileName: String): Properties = {
-    var in: FileInputStream = null
+    var in: InputStream = null
     try {
-      in = new FileInputStream(fileName)
+      in = ConfigurationManager.getClass.getClassLoader.getResourceAsStream(fileName)
       prop.load(in)
     } catch {
       case ex: IOException =>
@@ -36,6 +40,8 @@ object ConfigurationManager {
     }
     prop
   }
+
+  initConfig("config.properties")
 
   /**
     * 获取字符串类型配置参数
@@ -57,6 +63,10 @@ object ConfigurationManager {
     val value = prop.getProperty(key)
     try {
       value.toInt
+    } catch {
+      case ex: Exception => {
+        throw new RuntimeException(s"invalid string:$value cast to int")
+      }
     }
   }
 
@@ -70,6 +80,10 @@ object ConfigurationManager {
     val value: String = prop.getProperty(key)
     try {
       value.toBoolean
+    } catch {
+      case ex: Exception => {
+        throw new RuntimeException(s"invalid string:$value  cast to boolean")
+      }
     }
   }
 
@@ -83,6 +97,63 @@ object ConfigurationManager {
     val value = prop.getProperty(key)
     try {
       value.toLong
+    } catch {
+      case ex: Exception => {
+        throw new RuntimeException(s"invalid string: $value cast to long")
+      }
     }
+  }
+
+  /**
+    * 获取配置项  并封装成Map对象
+    *
+    */
+  def getRedisConfig(): Map[String, Any] = {
+    val redisConf = Map(
+      Constants.REDIS_HOSTS -> ConfigurationManager.getProperty(Constants.REDIS_HOSTS).split(Constants.DELIMITER).toSet,
+      Constants.REDIS_MASTER -> ConfigurationManager.getProperty(Constants.REDIS_MASTER),
+      Constants.REDIS_TIMEOUT -> ConfigurationManager.getInt(Constants.REDIS_TIMEOUT),
+      Constants.REDIS_MAX_TOTAL -> ConfigurationManager.getInt(Constants.REDIS_MAX_TOTAL),
+      Constants.REDIS_MAX_IDLE -> ConfigurationManager.getInt(Constants.REDIS_MAX_IDLE),
+      Constants.REDIS_MIN_IDLE -> ConfigurationManager.getInt(Constants.REDIS_MIN_IDLE),
+      Constants.REDIS_TEST_ON_BORROW -> ConfigurationManager.getBoolean(Constants.REDIS_TEST_ON_BORROW),
+      Constants.REDIS_TEST_ON_RETURN -> ConfigurationManager.getBoolean(Constants.REDIS_TEST_ON_RETURN),
+      Constants.REDIS_MAX_WAIT_MILLIS -> ConfigurationManager.getInt(Constants.REDIS_MAX_WAIT_MILLIS)
+    )
+    redisConf
+  }
+
+  /**
+    * 获取Kafka参数
+    *
+    * @return
+    */
+  def getKafkaConfig(): (Array[String], Map[String, Object]) = {
+    val topics = ConfigurationManager.getProperty(Constants.KAFKA_TOPICS).split(Constants.DELIMITER)
+    val kafkaParams = Map[String, Object](
+      "bootstrap.servers" -> ConfigurationManager.getProperty(Constants.KAFKA_BOOTSTRAP_SERVERS),
+      "key.deserializer" -> classOf[StringDeserializer],
+      "value.deserializer" -> classOf[StringDeserializer],
+      "group.id" -> ConfigurationManager.getProperty(Constants.KAFKA_GROUP_ID),
+      "auto.offset.reset" -> ConfigurationManager.getProperty(Constants.KAFKA_AUTO_OFFSET_RESET),
+      "enable.auto.commit" -> (false: java.lang.Boolean)
+    )
+    (topics, kafkaParams)
+  }
+
+  /**
+    * 获取分类规则
+    *
+    * @return
+    */
+  def getRecordRules(): Map[String, Map[String, List[Map[String, List[String]]]]] = {
+    var rules: Map[String, Map[String, List[Map[String, List[String]]]]] = Map()
+    ConfigurationManager.getProperty(Constants.RULES_LIST).split(",").foreach(
+      ruleName => {
+        val rule = JsonUtil.parseRuleFile(s"""$ruleName.json""")
+        rules += (ruleName -> rule)
+      }
+    )
+    rules
   }
 }

@@ -1,6 +1,7 @@
 package com.hbzq.bigdata.spark.utils
 
 import com.hbzq.bigdata.spark.config.{ConfigurationManager, Constants}
+import org.apache.spark.sql.Row
 import scalikejdbc._
 
 /**
@@ -37,23 +38,58 @@ object MysqlJdbcUtil {
     * @param sql
     * @return
     */
-  def executeQuery(sql: String): List[Map[String, Any]] = {
+  def executeQuery(sql: String): List[Row] = {
     if (!initState) init()
-    DB.readOnly { implicit session =>
-      SQL(sql).map(_.toMap()).list.apply()
+    try {
+      DB.readOnly { implicit session =>
+        SQL(sql).map(rs => Row(rs.toMap().values)).list.apply()
+      }
+    } catch {
+      case ex: Exception => {
+        ex.printStackTrace()
+        List()
+      }
     }
   }
 
   /**
-    * 执行更新操作
+    * 执行批量更新操作
     *
     * @param sql
     * @return
     */
-  def executeUpdate(sql: String): Unit = {
+  def executeUpdate(sql: String, params: List[Any]): Unit = {
     if (!initState) init()
-    DB.localTx(implicit session => {
-      SQL(sql).update().apply()
-    })
+    try {
+      DB.localTx(implicit session => {
+        SQL(sql).bind(params: _*).update().apply()
+      })
+    } catch {
+      case ex: Exception => {
+        ex.printStackTrace()
+      }
+    }
+
+  }
+
+  /**
+    * 批量更新
+    *
+    * @param sql
+    * @param paramsList
+    */
+  def executeBatchUpdate(sql: String, paramsList: List[List[Any]]): Unit = {
+    if (!initState) init()
+    try {
+      DB.localTx(implicit session => {
+        paramsList.foreach(params => {
+          SQL(sql).bind(params: _*).update().apply()
+        })
+      })
+    } catch {
+      case ex: Exception => {
+        ex.printStackTrace()
+      }
+    }
   }
 }

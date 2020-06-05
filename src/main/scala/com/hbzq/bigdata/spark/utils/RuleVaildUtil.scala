@@ -1,7 +1,10 @@
 package com.hbzq.bigdata.spark.utils
 
 import com.google.common.base.Preconditions
-import com.hbzq.bigdata.spark.domain.BaseRecord
+import com.hbzq.bigdata.spark.config.ConfigurationManager
+import com.hbzq.bigdata.spark.domain.BaseTxRecord
+
+import scala.reflect.runtime.universe._
 
 /**
   * describe:
@@ -17,12 +20,12 @@ object RuleVaildUtil {
   var rules: Map[String, Map[String, List[Map[String, List[String]]]]] = _
   var inited: Boolean = false
 
-  def init(rules: Map[String, Map[String, List[Map[String, List[String]]]]]): Unit = {
-    this.rules = rules
+  def init(): Unit = {
+    this.rules = ConfigurationManager.getRecordRules()
     this.inited = true
   }
 
-
+  init()
 
   /**
     *
@@ -35,17 +38,19 @@ object RuleVaildUtil {
     this.rules.get(ruleName).get
   }
 
+
   /**
     * 验证规则 由对象自己实现验证规则
     *
-    * @param t
+    * @param record
     * @param ruleName
+    * @param _type
     * @return
     */
-  def matchClassify(t: BaseRecord, ruleName: String): String = {
+  def matchClassify(record: BaseTxRecord, ruleName: String, _type: Type): String = {
     Preconditions.checkArgument(inited, "rules not be inited,please load rules before vaild...", None)
     val classifyRule = getClassifyListByRuleName(ruleName)
-    t.matchClassify(classifyRule)
+    record.matchClassify(classifyRule, _type)
   }
 
   /**
@@ -58,5 +63,6 @@ object RuleVaildUtil {
   def getRuleListByName(ruleName: String, classifyName: String): List[Map[String, List[String]]] = {
     this.rules.get(ruleName).get(classifyName)
   }
+
 
 }
