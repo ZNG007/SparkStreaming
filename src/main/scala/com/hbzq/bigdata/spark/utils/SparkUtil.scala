@@ -34,7 +34,6 @@ object SparkUtil {
   def getSparkStreamingRunTime(duration: Int): (SparkContext, SparkSession, StreamingContext) = {
     val spark = SparkSession
       .builder
-      .master("local[10]")
       .enableHiveSupport()
       .getOrCreate()
     val conf = spark.sparkContext.getConf
@@ -77,7 +76,7 @@ object SparkUtil {
     val offsets = MysqlJdbcUtil.executeQuery(ConfigurationManager.getProperty(Constants.KAFKA_MYSQL_QUERY_OFFSET_SQL)
       , List(ConfigurationManager.getProperty(Constants.KAFKA_GROUP_ID)))
     val fromOffsets = offsets.map(rs =>
-      new TopicPartition(rs.getString(1), rs.getInt(2)) -> rs.getLong(3)).toMap
+      new TopicPartition(rs.get("topic").get.asInstanceOf[String], rs.get("partition").get.asInstanceOf[Int]) -> rs.get("offset").get.asInstanceOf[Long]).toMap
     if (fromOffsets.isEmpty) {
       getInputStreamFromKafka(ssc, topics, kafkaParams)
     } else {

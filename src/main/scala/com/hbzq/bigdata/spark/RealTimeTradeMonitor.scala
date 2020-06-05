@@ -60,8 +60,8 @@ object RealTimeTradeMonitor {
     // 获取spark运行时环境
     var (sparkContext, spark, ssc) = SparkUtil.getSparkStreamingRunTime(ConfigurationManager.getInt(Constants.SPARK_BATCH_DURATION))
     // 获取汇率表
-    //    val exchangeMap = SparkUtil.getExchangeRateFromHive(spark)
-    val exchangeMap: Map[String, BigDecimal] = Map()
+    val exchangeMap = SparkUtil.getExchangeRateFromHive(spark)
+    //    val exchangeMap: Map[String, BigDecimal] = Map()
     // 广播变量
     val exchangeMapBC = sparkContext.broadcast(exchangeMap)
 
@@ -70,15 +70,18 @@ object RealTimeTradeMonitor {
 
     inputStream.foreachRDD(rdd => {
       val offsetRanges = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
-      rdd.repartition(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM))
+
       // 提前过滤  只关心INSERT操作
-      val inputRdd = rdd.filter(message => {
+      val inputRdd = rdd
+        .repartition(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM))
+        .filter(message => {
         val value = message.value()
         StringUtils.isNotEmpty(value) && (value.contains("INSERT"))
       })
         .map(_.value())
-      // 持久化
-      inputRdd.persist(StorageLevel.MEMORY_AND_DISK)
+        .persist(StorageLevel.MEMORY_AND_DISK)
+
+
       // 计算委托相关的业务 委托笔数  委托金额  委托客户数
       val tdrwt: Map[String, (Int, BigDecimal)] = TdrwtOperator(inputRdd, exchangeMapBC).compute().toMap
       // 计算成交相关的业务 成交笔数  成交金额  成交客户数
@@ -120,7 +123,7 @@ object RealTimeTradeMonitor {
         val zr_sum = tdrzjmx.getOrElse(TdrzjmxOperator.ZJZR, BigDecimal(0))
         val zc_sum = tdrzjmx.getOrElse(TdrzjmxOperator.ZJZC, BigDecimal(0))
         var otherStates: List[List[Any]] = List()
-        otherStates ::= (1:: new_jg_count :: new_gr_count :: zr_sum :: zc_sum :: timestamp :: 1:: new_jg_count :: new_gr_count :: zr_sum :: zc_sum :: timestamp :: Nil)
+        otherStates ::= (1 :: new_jg_count :: new_gr_count :: zr_sum :: zc_sum :: timestamp :: 1 :: new_jg_count :: new_gr_count :: zr_sum :: zc_sum :: timestamp :: Nil)
         otherStates.foreach(otherState => {
           SQL(ConfigurationManager.getProperty(Constants.FLUSH_REDIS_TO_MYSQL_OTHER_STATE_SQL))
             .bind(otherState: _*).update().apply()
@@ -144,7 +147,7 @@ object RealTimeTradeMonitor {
     *
     * @return
     */
-  private def startScheduleTask():ScheduledExecutorService = {
+  private def startScheduleTask(): ScheduledExecutorService = {
     // 初始化Redis 删除Key调度线程池
     val scheduler = ThreadUtil.getSingleScheduleThreadPool(1)
 

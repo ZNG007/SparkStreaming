@@ -40,11 +40,11 @@ object MysqlJdbcUtil {
     * @param sql
     * @return
     */
-  def executeQuery(sql: String, params: List[Any]): List[Row] = {
+  def executeQuery(sql: String, params: List[Any]): List[Map[String,Any]] = {
     if (!initState) init()
     try {
       DB.readOnly { implicit session =>
-        SQL(sql).bind(params: _*).map(rs => Row(rs.toMap().values)).list.apply()
+        SQL(sql).bind(params: _*).map(rs => rs.toMap()).list.apply()
       }
     } catch {
       case ex: Exception => {
