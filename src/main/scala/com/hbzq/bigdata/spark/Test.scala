@@ -66,13 +66,15 @@ object Test {
 //    print(tempKhhsMap)
 
 //    startScheduleTask()
-    new RedisDelKeyTask().run()
+//    new RedisDelKeyTask().run()
 //    new FlushRedisToMysqlTask().run()
 
 //    println(DateUtil.getDurationTime())
 
 //    print(Array((1,2),(3,4)).toMap)
 //    print("01110_1".split("_")(1))
+
+    println(BigDecimal(0.0) == 0)
   }
 
   /**

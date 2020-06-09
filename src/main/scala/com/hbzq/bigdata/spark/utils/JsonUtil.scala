@@ -92,7 +92,9 @@ object JsonUtil {
       after.get("WTFS").getOrElse(""),
       after.get("WTGY").getOrElse(""),
       after.get("BZ").getOrElse(""),
-      BigDecimal(after.get("CJJE").getOrElse("0"))
+      BigDecimal(after.get("CJJE").getOrElse("0")),
+      BigDecimal(after.get("S1").getOrElse("0")),
+      after.get("CXBZ").getOrElse("")
     )
     val channel = tsscjRecord.matchClassify(
       RuleVaildUtil.getClassifyListByRuleName(Constants.RULE_TX_CHANNEL_CLASSIFY),

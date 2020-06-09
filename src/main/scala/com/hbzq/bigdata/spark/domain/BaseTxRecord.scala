@@ -14,7 +14,6 @@ import scala.util.control.Breaks
 trait BaseTxRecord {
 
 
-
   /**
     * 根据规则分类列表   获取记录所属规则分类
     *
@@ -64,12 +63,12 @@ trait BaseTxRecord {
 case class TdrwtRecord(var khh: String, var wth: String
                        , var yyb: String, var wtfs: String, var wtgy: String,
                        var bz: String, var cxwth: String, var wtsl: Int, var wtjg: BigDecimal,
-                        var channel: String = "qt") extends BaseTxRecord
+                       var channel: String = "qt") extends BaseTxRecord
 
-// TSSCJ   "KHH","CJBH","YYB","WTFS","WTGY","BZ","CJJE"
+// TSSCJ   "KHH","CJBH","YYB","WTFS","WTGY","BZ","CJJE","S1","CXBZ"
 case class TsscjRecord(var khh: String, var cjbh: String
                        , var yyb: String, var wtfs: String, var wtgy: String, var bz: String, var cjje: BigDecimal,
-                        var channel: String = "qt"
+                       var s1: BigDecimal, var cxbz: String, var channel: String = "qt"
                       ) extends BaseTxRecord
 
 

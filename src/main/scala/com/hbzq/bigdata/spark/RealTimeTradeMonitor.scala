@@ -80,10 +80,11 @@ object RealTimeTradeMonitor {
       val tkhxx: Map[String, Int] = TkhxxOperator(inputRdd).compute().toMap
       // 计算委托相关的业务 委托笔数  委托金额  委托客户数
       val tdrwt: Map[String, (Int, BigDecimal)] = TdrwtOperator(inputRdd, exchangeMapBC).compute().toMap
-      // 计算成交相关的业务 成交笔数  成交金额  成交客户数
-      val tsscj: Map[String, (Int, BigDecimal)] = TsscjOperator(inputRdd, exchangeMapBC).compute().toMap
-      // 计算净佣金
-//      val tjgmxls: Map[String, BigDecimal] = TjgmxlsOperator(inputRdd).compute().toMap
+      // 计算成交相关的业务 成交笔数  成交金额  成交客户数  佣金
+      val (tsscjTrade, tsscjJyj): (Array[(String, (Int, BigDecimal, BigDecimal))], Array[(String, BigDecimal)]) =
+        TsscjOperator(inputRdd, exchangeMapBC).compute()
+      val tsscj = tsscjTrade.toMap
+      val tsscj_jyj = tsscjJyj.toMap
       // 计算客户转入转出
       val tdrzjmx: Map[String, BigDecimal] = TdrzjmxOperator(inputRdd, exchangeMapBC).compute().toMap
       // 事物更新offset 及结果到Mysql
@@ -91,20 +92,22 @@ object RealTimeTradeMonitor {
         val timestamp = DateUtil.getNowTimestamp()
         // tdrwt + tsscj  trade_state
         var tradeStates: List[List[Any]] = List()
-        for (channel <- channels.keySet) {
-          var (wt_tx_count, wt_tx_sum) = tdrwt.getOrElse(channel, (0, BigDecimal(0)))
-          var (cj_tx_count, cj_tx_sum) = tsscj.getOrElse(channel, (0, BigDecimal(0)))
-          val _channel = channels.get(channel).get
-          tradeStates ::= (_channel :: wt_tx_count :: wt_tx_sum :: cj_tx_count :: cj_tx_sum :: timestamp :: _channel :: wt_tx_count :: wt_tx_sum :: cj_tx_count :: cj_tx_sum :: timestamp :: Nil)
+        if (!tdrwt.isEmpty || !tsscj.isEmpty) {
+          for (channel <- channels.keySet) {
+            var (wt_tx_count, wt_tx_sum) = tdrwt.getOrElse(channel, (0, BigDecimal(0)))
+            var (cj_tx_count, cj_tx_sum, jyj) = tsscj.getOrElse(channel, (0, BigDecimal(0), BigDecimal(0)))
+            val _channel = channels.get(channel).get
+            tradeStates ::= (_channel :: wt_tx_count :: wt_tx_sum :: cj_tx_count :: cj_tx_sum :: jyj :: timestamp :: _channel :: wt_tx_count :: wt_tx_sum :: cj_tx_count :: cj_tx_sum :: jyj :: timestamp :: Nil)
+          }
+          tradeStates.foreach(tradeState => {
+            SQL(ConfigurationManager.getProperty(Constants.FLUSH_REDIS_TO_MYSQL_TRADE_STATE_SQL))
+              .bind(tradeState: _*).update().apply()
+          })
         }
-        tradeStates.foreach(tradeState => {
-          SQL(ConfigurationManager.getProperty(Constants.FLUSH_REDIS_TO_MYSQL_TRADE_STATE_SQL))
-            .bind(tradeState: _*).update().apply()
-        })
         // jyj_state
         var jyjStates: List[List[Any]] = List()
-        for (yyb: String <- tjgmxls.keySet) {
-          val jyj = tjgmxls.getOrElse(yyb, BigDecimal(0))
+        for (yyb: String <- tsscj_jyj.keySet) {
+          val jyj = tsscj_jyj.getOrElse(yyb, BigDecimal(0))
           jyjStates ::= (yyb :: jyj :: timestamp :: yyb :: jyj :: timestamp :: Nil)
         }
         jyjStates.foreach(jyjState => {
@@ -116,12 +119,14 @@ object RealTimeTradeMonitor {
         val new_gr_count = tkhxx.getOrElse(TkhxxOperator.JG, 0)
         val zr_sum = tdrzjmx.getOrElse(TdrzjmxOperator.ZJZR, BigDecimal(0))
         val zc_sum = tdrzjmx.getOrElse(TdrzjmxOperator.ZJZC, BigDecimal(0))
-        var otherStates: List[List[Any]] = List()
-        otherStates ::= (1 :: new_jg_count :: new_gr_count :: zr_sum :: zc_sum :: timestamp :: 1 :: new_jg_count :: new_gr_count :: zr_sum :: zc_sum :: timestamp :: Nil)
-        otherStates.foreach(otherState => {
-          SQL(ConfigurationManager.getProperty(Constants.FLUSH_REDIS_TO_MYSQL_OTHER_STATE_SQL))
-            .bind(otherState: _*).update().apply()
-        })
+        if(new_jg_count != 0 || new_gr_count != 0 || zr_sum != 0 || zc_sum != 0){
+          var otherStates: List[List[Any]] = List()
+          otherStates ::= (1 :: new_jg_count :: new_gr_count :: zr_sum :: zc_sum :: timestamp :: 1 :: new_jg_count :: new_gr_count :: zr_sum :: zc_sum :: timestamp :: Nil)
+          otherStates.foreach(otherState => {
+            SQL(ConfigurationManager.getProperty(Constants.FLUSH_REDIS_TO_MYSQL_OTHER_STATE_SQL))
+              .bind(otherState: _*).update().apply()
+          })
+        }
         // Kafka Offset
         var kafkaOffsets: List[List[Any]] = List()
         offsetRanges.foreach(offsetRange => {
