@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<dataSource name="test">
+  <database-model serializer="dbm" rdbms="ORACLE" format-version="4.7">
+    <root id="1"/>
+    <schema id="2" parent="1" name="I2">
+      <ObjectId>89</ObjectId>
+      <IntrospectionTimestamp>2020-06-01.23:59:18</IntrospectionTimestamp>
+      <CreatedTimestamp>2020-03-12.23:05:03</CreatedTimestamp>
+      <ModifiedTimestamp>2020-03-12.23:05:03</ModifiedTimestamp>
+      <Current>1</Current>
+      <Visible>1</Visible>
+    </schema>
+    <schema id="3" parent="1" name="PUBLIC">
+      <ObjectId>1</ObjectId>
+    </schema>
+    <schema id="4" parent="1" name="SYS">
+      <ObjectId>0</ObjectId>
+    </schema>
+    <schema id="5" parent="1" name="SYSTEM">
+      <ObjectId>5</ObjectId>
+    </schema>
+    <schema id="6" parent="1" name="OUTLN">
+      <ObjectId>11</ObjectId>
+    </schema>
+    <schema id="7" parent="1" name="DIP">
+      <ObjectId>19</ObjectId>
+    </schema>
+    <schema id="8" parent="1" name="TSMSYS">
+      <ObjectId>21</ObjectId>
+    </schema>
+    <schema id="9" parent="1" name="DBSNMP">
+      <ObjectId>24</ObjectId>
+    </schema>
+    <schema id="10" parent="1" name="ORACLE_OCM">
+      <ObjectId>25</ObjectId>
+    </schema>
+    <schema id="11" parent="1" name="WMSYS">
+      <ObjectId>26</ObjectId>
+    </schema>
+    <schema id="12" parent="1" name="GFZHGL">
+      <ObjectId>36</ObjectId>
+    </schema>
+    <schema id="13" parent="1" name="TSQX">
+      <ObjectId>39</ObjectId>
+    </schema>
+    <schema id="14" parent="1" name="ADA">
+      <ObjectId>46</ObjectId>
+    </schema>
+    <schema id="15" parent="1" name="RDA">
+      <ObjectId>69</ObjectId>
+    </schema>
+    <schema id="16" parent="1" name="TEST">
+      <ObjectId>70</ObjectId>
+    </schema>
+    <schema id="17" parent="1" name="VIPTEST">
+      <ObjectId>71</ObjectId>
+    </schema>
+    <schema id="18" parent="1" name="OTCTEST">
+      <ObjectId>72</ObjectId>
+    </schema>
+    <schema id="19" parent="1" name="AUIMS3_LOG">
+      <ObjectId>76</ObjectId>
+    </schema>
+    <schema id="20" parent="1" name="AUIMS3">
+      <ObjectId>77</ObjectId>
+    </schema>
+    <schema id="21" parent="1" name="TEST_XHMM">
+      <ObjectId>78</ObjectId>
+    </schema>
+    <schema id="22" parent="1" name="TEST_XHMM1">
+      <ObjectId>86</ObjectId>
+    </schema>
+    <schema id="23" parent="1" name="TEST_DEL">
+      <ObjectId>87</ObjectId>
+    </schema>
+    <schema id="24" parent="1" name="ZIGUAN">
+      <ObjectId>97</ObjectId>
+    </schema>
+    <schema id="25" parent="1" name="ABOSS">
+      <ObjectId>98</ObjectId>
+    </schema>
+    <schema id="26" parent="1" name="CUSTOMER">
+      <ObjectId>99</ObjectId>
+    </schema>
+    <schema id="27" parent="1" name="ACCOUNT">
+      <ObjectId>100</ObjectId>
+    </schema>
+    <schema id="28" parent="1" name="SECURITIES">
+      <ObjectId>101</ObjectId>
+    </schema>
+    <schema id="29" parent="1" name="OFS">
+      <ObjectId>102</ObjectId>
+    </schema>
+    <schema id="30" parent="1" name="MARGIN">
+      <ObjectId>103</ObjectId>
+    </schema>
+    <schema id="31" parent="1" name="ZRT">
+      <ObjectId>104</ObjectId>
+    </schema>
+    <schema id="32" parent="1" name="SY">
+      <ObjectId>105</ObjectId>
+    </schema>
+    <table id="33" parent="2" name="I2ACTIVE_TAB">
+      <ObjectId>62708</ObjectId>
+      <CreatedTimestamp>2020-03-12.23:05:03</CreatedTimestamp>
+      <ModifiedTimestamp>2020-03-12.23:05:03</ModifiedTimestamp>
+      <TemporaryPreserve>1</TemporaryPreserve>
+    </table>
+    <column id="34" parent="33" name="I">
+      <Position>1</Position>
+      <DataType>NUMBER(*)|0</DataType>
+    </column>
+  </database-model>
+</dataSource>
