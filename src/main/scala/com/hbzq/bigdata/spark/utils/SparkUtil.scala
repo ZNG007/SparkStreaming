@@ -1,6 +1,7 @@
 package com.hbzq.bigdata.spark.utils
 
 import com.hbzq.bigdata.spark.config.{ConfigurationManager, Constants}
+import com.hbzq.bigdata.spark.domain._
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.log4j.Logger
@@ -34,10 +35,23 @@ object SparkUtil {
   def getSparkStreamingRunTime(duration: Int): (SparkContext, SparkSession, StreamingContext) = {
     val spark = SparkSession
       .builder
+      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .enableHiveSupport()
       .getOrCreate()
-    val conf = spark.sparkContext.getConf
     val sparkContext = spark.sparkContext
+    val conf = sparkContext.getConf
+
+    // 注册Kyro 序列化类
+    conf.registerKryoClasses(
+      Array(
+        classOf[TdrwtRecord],
+        classOf[TsscjRecord],
+        classOf[TkhxxRecord],
+        classOf[TjgmxlsRecord],
+        classOf[TdrzjmxRecord]
+      )
+    )
+
     val ssc = new StreamingContext(sparkContext, Seconds(duration))
     sparkContext.setLogLevel("WARN")
     (sparkContext, spark, ssc)

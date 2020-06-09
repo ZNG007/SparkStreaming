@@ -1,8 +1,5 @@
 package com.hbzq.bigdata.spark.domain
 
-import com.hbzq.bigdata.spark.RealTimeTradeMonitor
-import org.apache.log4j.Logger
-
 import scala.reflect.runtime.universe._
 import scala.util.control.Breaks
 
@@ -26,9 +23,6 @@ trait BaseTxRecord {
     * @return
     */
   def matchClassify(classifys: Map[String, List[Map[String, List[String]]]], _type: Type): String = {
-
-    val start = System.currentTimeMillis()
-
     var classify: String = "qt"
     for ((classify, rules) <- classifys) {
       for (rule <- rules) {
@@ -45,25 +39,9 @@ trait BaseTxRecord {
             }
           }
         }
-        if (flag) {
-          println(
-            s"""
-               |==============
-               |匹配成功耗时：
-               |${System.currentTimeMillis()-start}
-               |==============
-             """.stripMargin)
-          return classify
-        }
+        if (flag) return classify
       }
     }
-      println(
-        s"""
-           |==============
-           |匹配不成功,使用默认值 耗时：
-           |${System.currentTimeMillis()-start}
-           |==============
-             """.stripMargin)
     classify
   }
 
@@ -75,23 +53,10 @@ trait BaseTxRecord {
     * @return
     */
   def getFieldValueByName(name: String, _type: Type): String = {
-
-    val start = System.currentTimeMillis()
-
     val mirror = runtimeMirror(getClass().getClassLoader)
     val instanceMirror = mirror.reflect(this)
     val nameField = _type.decl(TermName(name)).asTerm
-    val res = instanceMirror.reflectField(nameField).get.toString
-
-    println(
-      s"""
-        |==============
-        |反射耗时
-        |${System.currentTimeMillis()-start}
-        |==============
-      """.stripMargin)
-    res
-
+    instanceMirror.reflectField(nameField).get.toString
   }
 }
 

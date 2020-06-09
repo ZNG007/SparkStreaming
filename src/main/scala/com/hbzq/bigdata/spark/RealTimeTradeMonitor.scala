@@ -33,6 +33,8 @@ object RealTimeTradeMonitor {
 
     // 获取Kafka配置
     var (topics, kafkaParams) = ConfigurationManager.getKafkaConfig()
+    // 启动  先删除Redis  key
+    RedisDelKeyTask().run()
     var ssc: StreamingContext = startApp(topics, kafkaParams)
     // 启动调度任务
     val scheduler = startScheduleTask()
@@ -65,31 +67,23 @@ object RealTimeTradeMonitor {
     // 广播变量
     val exchangeMapBC = sparkContext.broadcast(exchangeMap)
 
-
     val inputStream = SparkUtil.getInputStreamFromKafkaByMysqlOffset(ssc, topics, kafkaParams)
-
     inputStream.foreachRDD(rdd => {
       val offsetRanges = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
-
       // 提前过滤  只关心INSERT操作
       val inputRdd = rdd
-        .repartition(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM))
-        .filter(message => {
-        val value = message.value()
-        StringUtils.isNotEmpty(value) && (value.contains("INSERT"))
-      })
         .map(_.value())
-        .persist(StorageLevel.MEMORY_AND_DISK)
-
-
+        .repartition(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM))
+        .filter(message => StringUtils.isNotEmpty(message) && message.contains("INSERT"))
+        .persist(StorageLevel.MEMORY_ONLY_SER)
+      // 新增客户数
+      val tkhxx: Map[String, Int] = TkhxxOperator(inputRdd).compute().toMap
       // 计算委托相关的业务 委托笔数  委托金额  委托客户数
       val tdrwt: Map[String, (Int, BigDecimal)] = TdrwtOperator(inputRdd, exchangeMapBC).compute().toMap
       // 计算成交相关的业务 成交笔数  成交金额  成交客户数
       val tsscj: Map[String, (Int, BigDecimal)] = TsscjOperator(inputRdd, exchangeMapBC).compute().toMap
-      // 新增客户数
-      val tkhxx: Map[String, Int] = TkhxxOperator(inputRdd).compute().toMap
       // 计算净佣金
-      val tjgmxls: Map[String, BigDecimal] = TjgmxlsOperator(inputRdd).compute().toMap
+//      val tjgmxls: Map[String, BigDecimal] = TjgmxlsOperator(inputRdd).compute().toMap
       // 计算客户转入转出
       val tdrzjmx: Map[String, BigDecimal] = TdrzjmxOperator(inputRdd, exchangeMapBC).compute().toMap
       // 事物更新offset 及结果到Mysql
@@ -136,7 +130,6 @@ object RealTimeTradeMonitor {
               , offsetRange.partition, offsetRange.untilOffset).update().apply()
         })
       })
-
     })
     ssc.start()
     ssc
@@ -150,11 +143,9 @@ object RealTimeTradeMonitor {
   private def startScheduleTask(): ScheduledExecutorService = {
     // 初始化Redis 删除Key调度线程池
     val scheduler = ThreadUtil.getSingleScheduleThreadPool(1)
-
     // Mysql数据同步调度线程池
-
     scheduler.scheduleWithFixedDelay(new FlushRedisToMysqlTask(),
-      60,
+      30,
       ConfigurationManager.getInt(Constants.FLUSH_REDIS_TO_MYSQL_SCHEDULE_INTERVAL),
       TimeUnit.SECONDS
     )
