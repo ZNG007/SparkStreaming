@@ -49,12 +49,22 @@ object Constants {
   val REDIS_VALUE_DOUBLE_TO_LONG="redis.value.double.to.long"
   val FLUSH_REDIS_TO_MYSQL_SCHEDULE_INTERVAL ="redis.flush.mysql.schedule.interval"
 
+  // HBase
+  /*val HBASE_ZOOKEEPER_QUORUM="hbase.zookeeper.quorum"
+  val HBASE_ZOOKEEPER_CLIENTPORT="hbase.zookeeper.client.port"
+  val HBASE_CLUSTER_DISTRIBUTED="hbase.cluster.distributed"
+  val HBASE_ZOOKEEPER_ZNODE_PARENT="hbase.zookeeper.znode.parent"*/
+  val HBASE_TDRWT_WTH_TABLE="hbase.tdrwt.wth.table"
+  val HBASE_WTH_INFO_FAMILY_COLUMNS="hbase.wth.info.family.columns"
+
   // exchange rate sql
-  val DIM_EXCHANGE_RATE_SQL = "dim.exchange.rate.sql"
-  val FLUSH_REDIS_TO_MYSQL_TRADE_STATE_SQL = "flush.redis.to.mysql.trade.state.sql"
+  val DIM_EXCHANGE_RATE_SQL = "hive.dim.exchange.rate.sql"
+  val MYSQL_UPSERT_NOW_TRADE_STATE_SQL = "mysql.upsert.now.trade.state.sql"
+  val MYSQL_UPSERT_NEXT_TRADE_STATE_SQL = "mysql.upsert.next.trade.state.sql"
   val FLUSH_REDIS_TO_MYSQL_TRADE_STATE_KHH_SQL = "flush.redis.to.mysql.trade.state.khh.sql"
-  val FLUSH_REDIS_TO_MYSQL_JYJ_STATE_SQL = "flush.redis.to.mysql.jyj.state.sql"
-  val FLUSH_REDIS_TO_MYSQL_OTHER_STATE_SQL = "flush.redis.to.mysql.other.state.sql"
+  val MYSQL_UPSERT_JYJ_STATE_SQL = "mysql.upsert.jyj.state.sql"
+  val MYSQL_UPSERT_OTHER_STATE_SQL = "mysql.upsert.other.state.sql"
+  val MYSQL_NEXT_TRADE_DAY_QUERY_SQL = "mysql.next.trade.day.query.sql"
 
   // stop job
   val APP_STOP_HOUR ="app.stop.hour"

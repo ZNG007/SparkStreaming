@@ -24,3 +24,8 @@ case class TdrzjmxRecord(var khh: String, var lsh: String,
                          ywkm: String, bz: String, op: String, je: BigDecimal
                         ) extends BaseInfoRecord
 
+// TSSCJ   "KHH","CJBH","YYB","WTFS","WTGY","BZ","CJJE","S1","CXBZ","WTH"
+case class TsscjRecord(var khh: String, var cjbh: String
+                       , var yyb: String, var bz: String, var cjje: BigDecimal,
+                       var s1: BigDecimal, var cxbz: String, var wth: String, var channel: String = "undefine"
+                      ) extends BaseInfoRecord

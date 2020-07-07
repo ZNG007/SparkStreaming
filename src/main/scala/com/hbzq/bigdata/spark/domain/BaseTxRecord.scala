@@ -59,16 +59,12 @@ trait BaseTxRecord {
   }
 }
 
-// TDRWT   "KHH","WTH","YYB","WTFS", "WTGY","BZ","CXWTH","WTSL","WTJG"
+// TDRWT   "KHH","WTH","YYB","WTFS", "WTGY","BZ","CXWTH","WTSL","WTJG","SBRQ"
 case class TdrwtRecord(var khh: String, var wth: String
                        , var yyb: String, var wtfs: String, var wtgy: String,
                        var bz: String, var cxwth: String, var wtsl: Int, var wtjg: BigDecimal,
                        var channel: String = "qt") extends BaseTxRecord
 
-// TSSCJ   "KHH","CJBH","YYB","WTFS","WTGY","BZ","CJJE","S1","CXBZ"
-case class TsscjRecord(var khh: String, var cjbh: String
-                       , var yyb: String, var wtfs: String, var wtgy: String, var bz: String, var cjje: BigDecimal,
-                       var s1: BigDecimal, var cxbz: String, var channel: String = "qt"
-                      ) extends BaseTxRecord
+
 
 

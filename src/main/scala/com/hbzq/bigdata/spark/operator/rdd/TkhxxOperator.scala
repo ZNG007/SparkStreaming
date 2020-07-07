@@ -23,10 +23,11 @@ class TkhxxOperator(var rdd: RDD[String]) extends RddOperator {
 
   override def compute(): Array[(String, Int)] = {
 
-    rdd.filter(message => {
-      message.contains("TKHXX")
-    })
-      .coalesce(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM) / 2)
+    rdd
+      .filter(message => {
+        message.contains("TKHXX")
+      })
+      .coalesce(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM) / 4)
       .map(message => {
         JsonUtil.parseKakfaRecordToTkhxxRecord(message)
       })
@@ -34,7 +35,7 @@ class TkhxxOperator(var rdd: RDD[String]) extends RddOperator {
         record != null &&
           !"".equalsIgnoreCase(record.khh) &&
           record.khrq == DateUtil.getFormatNowDate() &&
-          !"".equalsIgnoreCase(record.jgbz)
+          !TkhxxOperator.QT.equalsIgnoreCase(record.jgbz)
       })
       .map(record => (record.jgbz, 1))
       .aggregateByKey(0)(

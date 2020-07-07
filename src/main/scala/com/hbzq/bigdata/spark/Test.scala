@@ -4,7 +4,8 @@ import java.util.concurrent.{Executors, TimeUnit}
 
 import com.hbzq.bigdata.spark.config.{ConfigurationManager, Constants}
 import com.hbzq.bigdata.spark.operator.runnable.{FlushRedisToMysqlTask, RedisDelKeyTask}
-import com.hbzq.bigdata.spark.utils.{DateUtil, JsonUtil, RedisUtil, ThreadUtil}
+import com.hbzq.bigdata.spark.utils._
+import org.apache.hadoop.hdfs.DistributedFileSystem
 import redis.clients.jedis.Jedis
 
 import scala.collection.JavaConverters._
@@ -74,29 +75,45 @@ object Test {
 //    print(Array((1,2),(3,4)).toMap)
 //    print("01110_1".split("_")(1))
 
-    println(BigDecimal(0.0) == 0)
+//    println(BigDecimal(0.0) == 0)
+//    println(1.hashCode())
+//      val str = "abc".getBytes()
+//      println(new String(str))
+//    println((Integer.MAX_VALUE-789).toString.reverse)
+
+    import org.apache.hadoop.security.UserGroupInformation
+    import java.security.PrivilegedAction
+    import org.apache.hadoop.conf.Configuration
+
+    val conf = new Configuration()
+
+    val krb5_path = "E:\\javaProjects\\learn-bigdata\\learn-hive\\src\\main\\resources\\krb5.conf"
+    val keytab_path = "E:\\javaProjects\\learn-bigdata\\learn-hive\\src\\main\\resources\\hive.keytab"
+
+    System.setProperty("java.security.krb5.conf", krb5_path)
+
+    conf.set("fs.hdfs.impl", classOf[DistributedFileSystem].getName)
+    conf.set("hadoop.security.authentication", "kerberos")
+    UserGroupInformation.setConfiguration(conf)
+    try
+      UserGroupInformation.loginUserFromKeytab("hive/ut01.hbzq.com@HBZQ.COM", keytab_path)
+    catch {
+      case e: Exception =>
+
+        e.printStackTrace()
+    }
+
+    UserGroupInformation.getCurrentUser.doAs(new PrivilegedAction[String]() {
+      override def run: String = {
+//        HBaseUtil.insertMessageToHBase("trade_monitor:tdrwt_wth","1111","info","channel","123")
+        println(HBaseUtil.getMessageStrFromHBase("trade_monitor:tdrwt_wth","2222","info","channel"))
+        ""
+
+      }
+    })
+
+//    RedisDelKeyTask(DateUtil.getFormatNowDate()).run()
   }
 
-  /**
-    * 调度任务
-    *
-    * @return
-    */
-  private def startScheduleTask() = {
-    // 初始化Redis 删除Key调度线程池
-    val scheduler = ThreadUtil.getSingleScheduleThreadPool(2)
-    // 定期清除Redis中的key
-    scheduler.scheduleWithFixedDelay(new RedisDelKeyTask(),
-      0,
-      ConfigurationManager.getInt(Constants.REDIS_KEY_DEL_SCHEDULE_INTERVAL),
-      TimeUnit.SECONDS
-    )
-    // Mysql数据同步调度线程池
 
-    scheduler.scheduleWithFixedDelay(new FlushRedisToMysqlTask(),
-      60,
-      ConfigurationManager.getInt(Constants.FLUSH_REDIS_TO_MYSQL_SCHEDULE_INTERVAL),
-      TimeUnit.SECONDS
-    )
-  }
 }

@@ -16,7 +16,7 @@ import scala.collection.JavaConverters._
   * @version [v1.0] 
   *
   */
-class RedisDelKeyTask() extends Runnable {
+class RedisDelKeyTask extends Runnable {
 
   override def run(): Unit = {
     val pattern = ConfigurationManager.getProperty(Constants.REDIS_KEY_DEL_PATTERN)
@@ -26,11 +26,11 @@ class RedisDelKeyTask() extends Runnable {
       val keys = jedis.keys(pattern)
       keys.asScala.foreach(jedis.del(_))
       RedisUtil.closeConn(jedis)
-      RedisUtil.close();
     }
 
   }
 }
-object RedisDelKeyTask{
+
+object RedisDelKeyTask {
   def apply(): RedisDelKeyTask = new RedisDelKeyTask()
 }

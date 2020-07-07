@@ -24,6 +24,5 @@ object ThreadUtil {
   def getSingleScheduleThreadPool(i:Int): ScheduledExecutorService = {
 
     Executors.newScheduledThreadPool(i)
-
   }
 }

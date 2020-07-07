@@ -23,9 +23,10 @@ class TdrzjmxOperator(var rdd: RDD[String],
 
   override def compute(): Array[(String, BigDecimal)] = {
 
-    rdd.filter(message => {
-      message.contains("TDRZJMX")
-    })
+    rdd
+      .filter(message => {
+        message.contains("TDRZJMX")
+      })
       .coalesce(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM) / 2)
       .map(message => {
         JsonUtil.parseKakfaRecordToTdrzjmxRecord(message)

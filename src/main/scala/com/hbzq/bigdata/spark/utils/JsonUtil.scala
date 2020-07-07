@@ -2,7 +2,7 @@ package com.hbzq.bigdata.spark.utils
 
 import java.io.File
 
-import com.hbzq.bigdata.spark.config.Constants
+import com.hbzq.bigdata.spark.config.{ConfigurationManager, Constants}
 import com.hbzq.bigdata.spark.domain._
 import com.hbzq.bigdata.spark.operator.rdd.{TdrzjmxOperator, TkhxxOperator}
 import com.owlike.genson.defaultGenson._
@@ -27,7 +27,6 @@ object JsonUtil {
   private[this] val logger = Logger.getLogger(JsonUtil.getClass)
 
 
-
   /**
     * 读取Json文件获取
     *
@@ -50,27 +49,36 @@ object JsonUtil {
     * @param message
     * @return
     */
-  def parseKakfaRecordToTdrwtRecord(message:String): TdrwtRecord = {
-    val (tableName, op, after) = parseJsonStringToMap(message)
-    if(!"TDRWT".equalsIgnoreCase(tableName) || !"INSERT".equalsIgnoreCase(op) || after.isEmpty){
+  def parseKakfaRecordToTdrwtRecord(message: String): TdrwtRecord = {
+    val (tableName, op, owner, after, before) = parseAllJsonStringToMap(message)
+    if (!"TDRWT".equalsIgnoreCase(tableName) || !"UPDATE".equalsIgnoreCase(op) || after.isEmpty || before.isEmpty) {
       return null
     }
-    val tdrwtRecord = TdrwtRecord(
-      after.get("KHH").getOrElse(""),
-      after.get("WTH").getOrElse(""),
-      after.get("YYB").getOrElse(""),
-      after.get("WTFS").getOrElse(""),
-      after.get("WTGY").getOrElse(""),
-      after.get("BZ").getOrElse(""),
-      after.get("CXWTH").getOrElse(""),
-      after.get("WTSL").getOrElse("0").toInt,
-      BigDecimal(after.get("WTJG").getOrElse("0"))
-    )
-    val channel = tdrwtRecord.matchClassify(
-      RuleVaildUtil.getClassifyListByRuleName(Constants.RULE_TX_CHANNEL_CLASSIFY),
-      typeOf[TdrwtRecord])
-    tdrwtRecord.channel = channel
-    tdrwtRecord
+    // 过滤数据
+    val before_jgsm = before.get("JGSM").getOrElse("").trim
+    val after_jgsm = after.get("JGSM").getOrElse("").trim
+
+    val before_jgsm_list = List("待申报","申报中")
+    if (after_jgsm.equalsIgnoreCase("已申报") && before_jgsm_list.contains(before_jgsm)) {
+      val tdrwtRecord = TdrwtRecord(
+        after.get("KHH").getOrElse(""),
+        after.get("WTH").getOrElse("0"),
+        after.get("YYB").getOrElse(""),
+        after.get("WTFS").getOrElse(""),
+        after.get("WTGY").getOrElse(""),
+        after.get("BZ").getOrElse(""),
+        after.get("CXWTH").getOrElse(""),
+        after.get("WTSL").getOrElse("0").toInt,
+        BigDecimal(after.get("WTJG").getOrElse("0"))
+      )
+      val channel = tdrwtRecord.matchClassify(
+        RuleVaildUtil.getClassifyListByRuleName(Constants.RULE_TX_CHANNEL_CLASSIFY),
+        typeOf[TdrwtRecord])
+      tdrwtRecord.channel = channel
+      tdrwtRecord
+    } else {
+      null
+    }
   }
 
   /**
@@ -79,9 +87,9 @@ object JsonUtil {
     * @param message
     * @return
     */
-  def parseKakfaRecordToTsscjRecord(message:  String): TsscjRecord = {
-    val (tableName, op, after) = parseJsonStringToMap(message)
-    if(!"TSSCJ".equalsIgnoreCase(tableName) || !"INSERT".equalsIgnoreCase(op) || after.isEmpty){
+  def parseKakfaRecordToTsscjRecord(message: String): TsscjRecord = {
+    val (tableName, op, after, owner) = parseAfterJsonStringToMap(message)
+    if (!"TSSCJ".equalsIgnoreCase(tableName) || !"INSERT".equalsIgnoreCase(op) || after.isEmpty) {
       return null
     }
     // TSSCJ "KHH","WTH","YYB","WTFS","WTGY","BZ","CJJE"
@@ -89,17 +97,12 @@ object JsonUtil {
       after.get("KHH").getOrElse(""),
       after.get("CJBH").getOrElse(""),
       after.get("YYB").getOrElse(""),
-      after.get("WTFS").getOrElse(""),
-      after.get("WTGY").getOrElse(""),
       after.get("BZ").getOrElse(""),
       BigDecimal(after.get("CJJE").getOrElse("0")),
       BigDecimal(after.get("S1").getOrElse("0")),
-      after.get("CXBZ").getOrElse("")
+      after.get("CXBZ").getOrElse(""),
+      after.get("WTH").getOrElse("0")
     )
-    val channel = tsscjRecord.matchClassify(
-      RuleVaildUtil.getClassifyListByRuleName(Constants.RULE_TX_CHANNEL_CLASSIFY),
-      typeOf[TsscjRecord])
-    tsscjRecord.channel = channel
     tsscjRecord
   }
 
@@ -109,9 +112,9 @@ object JsonUtil {
     * @param message
     * @return
     */
-  def parseKakfaRecordToTkhxxRecord(message:String): TkhxxRecord = {
-    val (tableName, op, after) = parseJsonStringToMap(message)
-    if(!"TKHXX".equalsIgnoreCase(tableName) || !"INSERT".equalsIgnoreCase(op) || after.isEmpty){
+  def parseKakfaRecordToTkhxxRecord(message: String): TkhxxRecord = {
+    val (tableName, op, after, owner) = parseAfterJsonStringToMap(message)
+    if (!"TKHXX".equalsIgnoreCase(tableName) || !"INSERT".equalsIgnoreCase(op) || after.isEmpty || !"CIF".equalsIgnoreCase(owner)) {
       return null
     }
     val jgbz = after.get("JGBZ").getOrElse("-1").toInt
@@ -142,8 +145,8 @@ object JsonUtil {
     */
   def parseKakfaRecordToTjgmxlsRecord(message: String): TjgmxlsRecord = {
 
-    val (tableName, op, after) = parseJsonStringToMap(message)
-    if(!"TJGMXLS".equalsIgnoreCase(tableName) || !"INSERT".equalsIgnoreCase(op) || after.isEmpty){
+    val (tableName, op, after, owner) = parseAfterJsonStringToMap(message)
+    if (!"TJGMXLS".equalsIgnoreCase(tableName) || !"INSERT".equalsIgnoreCase(op) || after.isEmpty) {
       return null
     }
     // TJGMXLS KHH,LSH,YYB,S1,S11,S12,S13
@@ -165,8 +168,8 @@ object JsonUtil {
     * @return
     */
   def parseKakfaRecordToTdrzjmxRecord(message: String): TdrzjmxRecord = {
-    val (tableName, op, after) = parseJsonStringToMap(message)
-    if(!"TDRZJMX".equalsIgnoreCase(tableName) || !"INSERT".equalsIgnoreCase(op) || after.isEmpty){
+    val (tableName, op, after, owner) = parseAfterJsonStringToMap(message)
+    if (!"TDRZJMX".equalsIgnoreCase(tableName) || !"INSERT".equalsIgnoreCase(op) || after.isEmpty) {
       return null
     }
 
@@ -175,7 +178,7 @@ object JsonUtil {
 
     val ywkm = after.get("YWKM").getOrElse("")
 
-    if(TdrzjmxOperator.TDRZJMX_SR_YWKM_LIST.contains(ywkm)){
+    if (TdrzjmxOperator.TDRZJMX_SR_YWKM_LIST.contains(ywkm)) {
       TdrzjmxRecord(
         after.get("KHH").getOrElse(""),
         after.get("LSH").getOrElse(""),
@@ -184,7 +187,7 @@ object JsonUtil {
         TdrzjmxOperator.ZJZR,
         srje
       )
-    }else if(TdrzjmxOperator.TDRZJMX_FC_YWKM_LIST.contains(ywkm)){
+    } else if (TdrzjmxOperator.TDRZJMX_FC_YWKM_LIST.contains(ywkm)) {
       TdrzjmxRecord(
         after.get("KHH").getOrElse(""),
         after.get("LSH").getOrElse(""),
@@ -193,23 +196,40 @@ object JsonUtil {
         TdrzjmxOperator.ZJZC,
         fcje
       )
-    }else{
+    } else {
       null
     }
   }
 
   /**
-    * 解析KafkaRecord 获取有用信息
+    * 解析KafkaRecord 获取after信息
     *
     * @param message
     * @return
     */
-  def getInfoFromKafkaRecord(message: Map[String,Any]): (String, String, Map[String, String]) = {
+  def getAfterInfoFromKafkaRecord(message: Map[String, Any]): (String, String, Map[String, String], String) = {
 
     val after = message.get("after").getOrElse(Map()).asInstanceOf[Map[String, String]]
     var op = message.get("optype").getOrElse("").asInstanceOf[String]
     var tableName = message.get("name").getOrElse("").asInstanceOf[String]
-    (tableName, op, after)
+    val owner = message.get("owner").getOrElse("").asInstanceOf[String]
+    (tableName, op, after, owner)
+  }
+
+  /**
+    * 解析KafkaRecord 获取所有信息
+    *
+    * @param message
+    * @return
+    */
+  def getAllInfoFromKafkaRecord(message: Map[String, Any]): (String, String, String, Map[String, String], Map[String, String]) = {
+
+    val after = message.get("after").getOrElse(Map()).asInstanceOf[Map[String, String]]
+    val before = message.get("before").getOrElse(Map()).asInstanceOf[Map[String, String]]
+    var op = message.get("optype").getOrElse("").asInstanceOf[String]
+    var tableName = message.get("name").getOrElse("").asInstanceOf[String]
+    val owner = message.get("owner").getOrElse("").asInstanceOf[String]
+    (tableName, op, owner, after, before)
   }
 
   /**
@@ -218,10 +238,10 @@ object JsonUtil {
     *
     * @param message
     */
-  def parseJsonStringToMap(message: String): (String, String, Map[String, String]) = {
+  def parseAfterJsonStringToMap(message: String): (String, String, Map[String, String], String) = {
     try {
       val parseMap = fromJson[Map[String, Any]](message)
-      getInfoFromKafkaRecord(parseMap)
+      getAfterInfoFromKafkaRecord(parseMap)
     } catch {
       case ex: Exception => {
         ex.printStackTrace()
@@ -233,7 +253,33 @@ object JsonUtil {
              |$message
              |============
           """.stripMargin)
-        ("","",Map())
+        ("", "", Map(), "")
+      }
+    }
+  }
+
+  /**
+    *
+    * 将 json字符串转Map对象
+    *
+    * @param message
+    */
+  def parseAllJsonStringToMap(message: String): (String, String, String, Map[String, String], Map[String, String]) = {
+    try {
+      val parseMap = fromJson[Map[String, Any]](message)
+      getAllInfoFromKafkaRecord(parseMap)
+    } catch {
+      case ex: Exception => {
+        ex.printStackTrace()
+        logger.warn(
+          s"""
+             |====WARN====
+             |kafka record json format is not vaild,please check
+             |kafka record :
+             |$message
+             |============
+          """.stripMargin)
+        ("", "", "", Map(), Map())
       }
     }
   }

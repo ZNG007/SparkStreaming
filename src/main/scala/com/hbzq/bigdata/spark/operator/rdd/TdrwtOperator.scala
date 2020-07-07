@@ -1,10 +1,12 @@
 package com.hbzq.bigdata.spark.operator.rdd
 
 import com.hbzq.bigdata.spark.config.{ConfigurationManager, Constants}
-import com.hbzq.bigdata.spark.utils.{JsonUtil, RedisUtil}
+import com.hbzq.bigdata.spark.domain.TdrwtRecord
+import com.hbzq.bigdata.spark.utils.{DateUtil, HBaseUtil, JsonUtil, RedisUtil}
 import org.apache.commons.configuration.ConfigurationFactory.ConfigurationBuilder
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
+import org.apache.spark.storage.StorageLevel
 
 
 /**
@@ -21,14 +23,21 @@ class TdrwtOperator(var rdd: RDD[String],
   override def compute(): Array[(String, (Int, BigDecimal))] = {
     rdd
       .filter(message => {
-      message.contains("TDRWT")
-    })
+        message.contains("TDRWT")
+      })
       .coalesce(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM) / 2)
       .map(message => {
         JsonUtil.parseKakfaRecordToTdrwtRecord(message)
       })
-      .filter(record => record != null && !"".equalsIgnoreCase(record.khh) && "0".equalsIgnoreCase(record.cxwth.trim))
-      .map(record => (record.channel, record))
+      .filter(record => record != null &&
+        !"".equalsIgnoreCase(record.khh) &&
+        "0".equalsIgnoreCase(record.cxwth.trim)
+      )
+      .map(record => {
+        // 将WTH及其对应Channel  存入HBase
+        insertWthMessageToHBase(record)
+        (record.channel, record)
+      })
       .aggregateByKey((0, BigDecimal(0)))(
         (acc, record) => {
           val bz = record.bz.toUpperCase
@@ -38,7 +47,7 @@ class TdrwtOperator(var rdd: RDD[String],
           val channel = record.channel
           // 更新客户号到Redis
           val jedis = RedisUtil.getConn()
-          jedis.setbit(s"${TdrwtOperator.TDRWT_KHH_PREFIX}${yyb}_$channel", tempKhh, true)
+          jedis.setbit(s"${TdrwtOperator.TDRWT_KHH_PREFIX}${yyb}_${DateUtil.getFormatNowDate()}_$channel", tempKhh, true)
           RedisUtil.closeConn(jedis)
           val exchange = exchangeMapBC.value.getOrElse(bz, BigDecimal(1))
           val wtje = record.wtsl * record.wtjg * exchange
@@ -50,6 +59,20 @@ class TdrwtOperator(var rdd: RDD[String],
       )
       .collect()
   }
+
+  /**
+    *
+    * @param record
+    */
+  private def insertWthMessageToHBase(record: TdrwtRecord) = {
+    HBaseUtil.insertMessageToHBase(
+      ConfigurationManager.getProperty(Constants.HBASE_TDRWT_WTH_TABLE),
+      HBaseUtil.getRowKeyFromInteger(record.wth.toInt),
+      ConfigurationManager.getProperty(Constants.HBASE_WTH_INFO_FAMILY_COLUMNS),
+      "channel",
+      record.channel
+    )
+  }
 }
 
 object TdrwtOperator {
@@ -59,4 +82,5 @@ object TdrwtOperator {
   def apply(rdd: RDD[String],
             exchangeMapBC: Broadcast[Map[String, BigDecimal]]
            ): TdrwtOperator = new TdrwtOperator(rdd, exchangeMapBC)
+
 }

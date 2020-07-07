@@ -4,7 +4,10 @@ import java.util.concurrent.TimeUnit
 
 import com.google.common.base.Stopwatch
 import com.hbzq.bigdata.spark.config.{ConfigurationManager, Constants}
-import com.hbzq.bigdata.spark.utils.{JsonUtil, RedisUtil, RuleVaildUtil}
+import com.hbzq.bigdata.spark.domain.TsscjRecord
+import com.hbzq.bigdata.spark.operator.runnable.FlushRedisToMysqlTask
+import com.hbzq.bigdata.spark.utils._
+import org.apache.commons.lang.StringUtils
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.log4j.Logger
 import org.apache.spark.broadcast.Broadcast
@@ -33,6 +36,21 @@ class TsscjOperator(var rdd: RDD[String],
       })
       .filter(record => record != null && !"".equalsIgnoreCase(record.khh) &&
         !"".equalsIgnoreCase(record.cjbh) && "O".equalsIgnoreCase(record.cxbz))
+      .map(record => {
+        // 从hbase中获取channel
+        val channel = getChannelFromHBase(record)
+        if (StringUtils.isNotEmpty(channel)) record.channel = channel
+        else TsscjOperator.logger.warn(
+          s"""
+             |===============TSSCJ record match any channel
+             |record :
+             |$record
+             |channel :
+             |$channel
+             |===============
+           """.stripMargin)
+        record
+      })
       .persist(StorageLevel.MEMORY_ONLY_SER)
 
     // 按照委托方式   计算成交笔数   成交金额   佣金
@@ -47,7 +65,7 @@ class TsscjOperator(var rdd: RDD[String],
           val channel = record.channel
           // 更新客户号到Redis
           val jedis = RedisUtil.getConn()
-          jedis.setbit(s"${TsscjOperator.TSSCJ_KHH_PREFIX}${yyb}_$channel", tempKhh, true)
+          jedis.setbit(s"${TsscjOperator.TSSCJ_KHH_PREFIX}${yyb}_${DateUtil.getFormatNowDate()}_$channel", tempKhh, true)
           RedisUtil.closeConn(jedis)
           val exchange = exchangeMapBC.value.getOrElse(bz, BigDecimal(1))
           val cjje = record.cjje * exchange
@@ -73,9 +91,26 @@ class TsscjOperator(var rdd: RDD[String],
       .collect()
     (tsscjTrade, tsscjJyj)
   }
+
+  /**
+    *
+    * @param record
+    * @return
+    */
+  private def getChannelFromHBase(record: TsscjRecord) = {
+    HBaseUtil.getMessageStrFromHBase(
+      ConfigurationManager.getProperty(Constants.HBASE_TDRWT_WTH_TABLE),
+      HBaseUtil.getRowKeyFromInteger(record.wth.toInt),
+      ConfigurationManager.getProperty(Constants.HBASE_WTH_INFO_FAMILY_COLUMNS),
+      "channel"
+    )
+  }
 }
 
 object TsscjOperator {
+
+  val logger = Logger.getLogger(TsscjOperator.getClass)
+
   val TSSCJ_KHH_PREFIX: String = "trade_monitor_tsscj_khh_"
 
   def apply(rdd: RDD[String],

@@ -39,15 +39,28 @@ object DateUtil {
     *
     * @return
     */
-  def getDurationTime():Long ={
+  def getDurationTime(): Long = {
     val now = LocalDateTime.now()
     val nowStamp = now.toInstant(ZoneOffset.of("+8")).toEpochMilli()
     val stopHour = ConfigurationManager.getInt(Constants.APP_STOP_HOUR)
-    val yaer = now.getYear
+    val year = now.getYear
     val month = now.getMonth
     val day = now.getDayOfMonth
 
-    val stopStamp = LocalDateTime.of(yaer,month,day,stopHour,0,0).toInstant(ZoneOffset.of("+8")).toEpochMilli()
+    val stopStamp = LocalDateTime.of(year, month, day, stopHour, 0, 0).toInstant(ZoneOffset.of("+8")).toEpochMilli()
     stopStamp - nowStamp
+  }
+
+
+  /**
+    * 获取下一个交易日
+    *
+    * @return
+    */
+  def getFormatNextTradeDay(): Int = {
+    val now = getFormatNowDate()
+    MysqlJdbcUtil
+      .executeQuery(ConfigurationManager.getProperty(Constants.MYSQL_NEXT_TRADE_DAY_QUERY_SQL), List(now))(0)
+      .getOrElse("jyr", 0).asInstanceOf[java.math.BigDecimal].intValue()
   }
 }

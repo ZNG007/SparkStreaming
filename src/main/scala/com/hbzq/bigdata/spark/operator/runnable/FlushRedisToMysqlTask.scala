@@ -20,7 +20,7 @@ import scala.collection.JavaConverters._
   * @version [v1.0] 
   *
   */
-class FlushRedisToMysqlTask extends Runnable {
+class FlushRedisToMysqlTask() extends Runnable {
 
   private[this] val logger = Logger.getLogger(FlushRedisToMysqlTask.getClass)
 
@@ -32,7 +32,6 @@ class FlushRedisToMysqlTask extends Runnable {
   }
 
 
-
   /**
     * 刷新有关交易的数据到Mysql
     *
@@ -41,20 +40,22 @@ class FlushRedisToMysqlTask extends Runnable {
     */
   private def processRealTradeKhhState(jedis: Jedis, keys: Map[String, String]) = {
     // 委托客户数
-    var wt_cust_count_map: Map[String, Int] = getSetSizeFromRedisWithPrefix(FlushRedisToMysqlTask.WT_CUST_COUNT,
+    var wt_cust_count_map: Map[(Int, String), Int] = getSetSizeFromRedisWithPrefix(FlushRedisToMysqlTask.WT_CUST_COUNT,
       keys, jedis)
-   
-    // 成交客户数
-    var cj_cust_count_map: Map[String, Int] = getSetSizeFromRedisWithPrefix(FlushRedisToMysqlTask.CJ_CUST_COUNT,
-      keys, jedis)
-    
-    var res: List[List[Any]] = List()
-    for (channel: String <- FlushRedisToMysqlTask.channels.keySet) {
-      val wt_cust_count = wt_cust_count_map.getOrElse(channel, 0)
-      val cj_cust_count = cj_cust_count_map.getOrElse(channel, 0)
-      val _channel = FlushRedisToMysqlTask.channels.get(channel).get
-      res ::= (_channel :: wt_cust_count :: cj_cust_count  :: _channel :: wt_cust_count  :: cj_cust_count  :: Nil)
 
+    // 成交客户数
+    var cj_cust_count_map: Map[(Int, String), Int] = getSetSizeFromRedisWithPrefix(FlushRedisToMysqlTask.CJ_CUST_COUNT,
+      keys, jedis)
+
+    var res: List[List[Any]] = List()
+    val now = DateUtil.getFormatNowDate()
+    for (channel: String <- FlushRedisToMysqlTask.channels.keySet) {
+      val _channel = FlushRedisToMysqlTask.channels.get(channel).get
+      val now_wt_cust_count = wt_cust_count_map.getOrElse((now, channel), 0)
+      val now_cj_cust_count = cj_cust_count_map.getOrElse((now, channel), 0)
+      if(now_wt_cust_count != 0 || now_cj_cust_count != 0){
+        res ::= (_channel :: now_wt_cust_count :: now_cj_cust_count :: now :: _channel :: now_wt_cust_count :: now_cj_cust_count :: now :: Nil)
+      }
     }
 
     logger.warn(
@@ -70,23 +71,24 @@ class FlushRedisToMysqlTask extends Runnable {
   }
 
 
-/**
-  * 根据前缀模式匹配符合条件的Key,并获取值,同时将key中有关Prefix替换成""
-  *
-  * @param Prefix
-  * @param jedis
-  * @param keys
-  * @return
-  */
-  def getSetSizeFromRedisWithPrefix(Prefix: String, keys: Map[String, String], jedis: Jedis): Map[String, Int] = {
-      var res: Map[String, Int] = Map()
+  /**
+    * 根据前缀模式匹配符合条件的Key,并获取值,同时将key中有关Prefix替换成""
+    *
+    * @param Prefix
+    * @param jedis
+    * @param keys
+    * @return
+    */
+  def getSetSizeFromRedisWithPrefix(Prefix: String, keys: Map[String, String], jedis: Jedis): Map[(Int, String), Int] = {
+    var res: Map[(Int, String), Int] = Map()
     val keyPattrn = keys.get(Prefix).get
     val matchKeys = jedis.keys(s"${keyPattrn}*")
     matchKeys.asScala.foreach(key => {
       val tempValue = jedis.bitcount(key)
-      val channel = key.replace(keyPattrn, "").split("_")(1)
-      val value = res.getOrElse(channel,0) + tempValue
-      res += (channel -> value.toInt)
+      val date = key.replace(keyPattrn, "").split("_")(1).toInt
+      val channel = key.replace(keyPattrn, "").split("_")(2)
+      val value = res.getOrElse((date, channel), 0) + tempValue
+      res += ((date, channel) -> value.toInt)
     })
     res
   }
@@ -130,7 +132,7 @@ object FlushRedisToMysqlTask {
   var channels: Map[String, String] = Map()
   private val WT_CUST_COUNT: String = "wt_cust_count"
   private val CJ_CUST_COUNT: String = "cj_cust_count"
-  
+
 
   private def init(): Unit = {
     keys += (WT_CUST_COUNT -> TdrwtOperator.TDRWT_KHH_PREFIX)
@@ -141,9 +143,11 @@ object FlushRedisToMysqlTask {
     channels += ("hbzt" -> "华宝智投")
     channels += ("hbzq" -> "华宝证券")
     channels += ("qt" -> "其他")
+    channels += ("undefine" -> "未定义")
   }
 
-  def apply: FlushRedisToMysqlTask = new FlushRedisToMysqlTask()
+  def apply(): FlushRedisToMysqlTask = new FlushRedisToMysqlTask()
+
   init()
 }
 
