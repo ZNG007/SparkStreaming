@@ -105,8 +105,12 @@ object Test {
 
     UserGroupInformation.getCurrentUser.doAs(new PrivilegedAction[String]() {
       override def run: String = {
-//        HBaseUtil.insertMessageToHBase("trade_monitor:tdrwt_wth","1111","info","channel","123")
-        println(HBaseUtil.getMessageStrFromHBase("trade_monitor:tdrwt_wth","2222","info","channel"))
+        // HBaseUtil.insertSingleColMessageToHBase("trade_monitor:tdrwt_wth","1111","info","xxxx","123")
+        // HBaseUtil.insertSingleColMessageToHBase("trade_monitor:tdrwt_wth","1111","info","yyyy","123")
+
+        val map = Map("zzz" ->"123","ddd" -> BigDecimal(2.33))
+        HBaseUtil.insertMultiColMessageToHBase("trade_monitor:tdrwt_wth","1111","info",map)
+        println(HBaseUtil.getMessageStrFromHBaseByAllCol("trade_monitor:tdrwt_wth","1111","info"))
         ""
 
       }

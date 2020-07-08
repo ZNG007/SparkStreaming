@@ -51,33 +51,71 @@ object JsonUtil {
     */
   def parseKakfaRecordToTdrwtRecord(message: String): TdrwtRecord = {
     val (tableName, op, owner, after, before) = parseAllJsonStringToMap(message)
-    if (!"TDRWT".equalsIgnoreCase(tableName) || !"UPDATE".equalsIgnoreCase(op) || after.isEmpty || before.isEmpty) {
-      return null
+    if(!"TDRWT".equalsIgnoreCase(tableName) || after.isEmpty){
+        return null
     }
-    // 过滤数据
-    val before_jgsm = before.get("JGSM").getOrElse("").trim
-    val after_jgsm = after.get("JGSM").getOrElse("").trim
+    op.toUpperCase match {
+        // INSERT消息  将channel 等消息插入 HBase
+      case "INSERT" => {
+          val khh = after.get("KHH").getOrElse("")
+          val wth = after.get("WTH").getOrElse("0")
+          val yyb = after.get("YYB").getOrElse("")
+          val wtfs = after.get("WTFS").getOrElse("")
+          val wtgy = after.get("WTGY").getOrElse("")
+          val bz = after.get("BZ").getOrElse("")
+          val wtsl = after.get("WTSL").getOrElse("0")
+          val wtjg = BigDecimal(after.get("WTJG").getOrElse("0"))
+        val data = Map(
+          "KHH" -> khh,"WTH" -> wth,"YYB" -> yyb,
+          "WTFS" -> wtfs,"WTGY" ->wtgy,"BZ" -> bz,
+          "WTSL" -> wtsl,"WTJG"->wtjg
+        )
+        // 将明细数据插入HBase
+        HBaseUtil.insertMultiColMessageToHBase(
+          ConfigurationManager.getProperty(Constants.HBASE_TDRWT_WTH_TABLE),
+          HBaseUtil.getRowKeyFromInteger(wth.toInt),
+          ConfigurationManager.getProperty(Constants.HBASE_WTH_INFO_FAMILY_COLUMNS),
+          data
+        )
+        null
+      }
+        // UPDATE消息
+      case "UPDATE" => {
 
-    val before_jgsm_list = List("待申报","申报中")
-    if (after_jgsm.equalsIgnoreCase("已申报") && before_jgsm_list.contains(before_jgsm)) {
-      val tdrwtRecord = TdrwtRecord(
-        after.get("KHH").getOrElse(""),
-        after.get("WTH").getOrElse("0"),
-        after.get("YYB").getOrElse(""),
-        after.get("WTFS").getOrElse(""),
-        after.get("WTGY").getOrElse(""),
-        after.get("BZ").getOrElse(""),
-        after.get("CXWTH").getOrElse(""),
-        after.get("WTSL").getOrElse("0").toInt,
-        BigDecimal(after.get("WTJG").getOrElse("0"))
-      )
-      val channel = tdrwtRecord.matchClassify(
-        RuleVaildUtil.getClassifyListByRuleName(Constants.RULE_TX_CHANNEL_CLASSIFY),
-        typeOf[TdrwtRecord])
-      tdrwtRecord.channel = channel
-      tdrwtRecord
-    } else {
-      null
+        val before_jgsm = before.get("JGSM").getOrElse("").trim
+        val after_jgsm = after.get("JGSM").getOrElse("").trim
+        val wth = before.get("WTH").getOrElse("0").toInt
+
+        val before_jgsm_list = List("待申报","申报中")
+        if (after_jgsm.equalsIgnoreCase("已申报") && before_jgsm_list.contains(before_jgsm)) {
+          // 从HBase中获取数据
+          val data = HBaseUtil.getMessageStrFromHBaseByAllCol(
+            ConfigurationManager.getProperty(Constants.HBASE_TDRWT_WTH_TABLE),
+            HBaseUtil.getRowKeyFromInteger(wth.toInt),
+            ConfigurationManager.getProperty(Constants.HBASE_WTH_INFO_FAMILY_COLUMNS)
+          )
+          val tdrwtRecord = TdrwtRecord(
+            data.get("KHH").getOrElse(""),
+            data.get("WTH").getOrElse("0"),
+            data.get("YYB").getOrElse(""),
+            data.get("WTFS").getOrElse(""),
+            data.get("WTGY").getOrElse(""),
+            data.get("BZ").getOrElse(""),
+            data.get("WTSL").getOrElse("0").toInt,
+            BigDecimal(data.get("WTJG").getOrElse("0"))
+          )
+          val channel = tdrwtRecord.matchClassify(
+            RuleVaildUtil.getClassifyListByRuleName(Constants.RULE_TX_CHANNEL_CLASSIFY),
+            typeOf[TdrwtRecord])
+          tdrwtRecord.channel = channel
+          tdrwtRecord
+        } else {
+          null
+        }
+      }
+      case _ => {
+        null
+      }
     }
   }
 

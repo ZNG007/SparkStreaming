@@ -31,16 +31,14 @@ class TdrwtOperator(var rdd: RDD[String],
       })
       .filter(record => record != null &&
         !"".equalsIgnoreCase(record.khh) &&
-        "0".equalsIgnoreCase(record.cxwth.trim)
+        !"0".equalsIgnoreCase(record.wth)
       )
       .map(record => {
-        // 将WTH及其对应Channel  存入HBase
-        insertWthMessageToHBase(record)
         (record.channel, record)
       })
       .aggregateByKey((0, BigDecimal(0)))(
         (acc, record) => {
-          val bz = record.bz.toUpperCase
+          val bz = record.bz.trim.toUpperCase
           val khh = record.khh
           val yyb = record.yyb
           val tempKhh = khh.substring(4).toInt
@@ -65,7 +63,7 @@ class TdrwtOperator(var rdd: RDD[String],
     * @param record
     */
   private def insertWthMessageToHBase(record: TdrwtRecord) = {
-    HBaseUtil.insertMessageToHBase(
+    HBaseUtil.insertSingleColMessageToHBase(
       ConfigurationManager.getProperty(Constants.HBASE_TDRWT_WTH_TABLE),
       HBaseUtil.getRowKeyFromInteger(record.wth.toInt),
       ConfigurationManager.getProperty(Constants.HBASE_WTH_INFO_FAMILY_COLUMNS),

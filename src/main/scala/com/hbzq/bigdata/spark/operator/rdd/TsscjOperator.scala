@@ -98,7 +98,7 @@ class TsscjOperator(var rdd: RDD[String],
     * @return
     */
   private def getChannelFromHBase(record: TsscjRecord) = {
-    HBaseUtil.getMessageStrFromHBase(
+    HBaseUtil.getMessageStrFromHBaseBySingleCol(
       ConfigurationManager.getProperty(Constants.HBASE_TDRWT_WTH_TABLE),
       HBaseUtil.getRowKeyFromInteger(record.wth.toInt),
       ConfigurationManager.getProperty(Constants.HBASE_WTH_INFO_FAMILY_COLUMNS),

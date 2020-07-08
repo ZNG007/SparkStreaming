@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit
 import com.google.common.cache._
 import com.hbzq.bigdata.spark.config.{ConfigurationManager, Constants}
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.hbase.{HBaseConfiguration, MasterNotRunningException, TableName}
+import org.apache.hadoop.hbase.{CellUtil, HBaseConfiguration, MasterNotRunningException, TableName}
 import org.apache.hadoop.hbase.client._
 import org.apache.hadoop.hbase.util.Bytes
 
@@ -65,14 +65,14 @@ object HBaseUtil {
 
 
   /**
-    *
+    * HBase 插入单列数据
     * @param tableName
     * @param rowkey
     * @param columnFamily
     * @param column
     * @param value
     */
-  def insertMessageToHBase(tableName: String, rowkey: String, columnFamily: String, column: String, value: String) = {
+  def insertSingleColMessageToHBase(tableName: String, rowkey: String, columnFamily: String, column: String, value: String) = {
     val table = getHbaseClient(tableName)
     val put = new Put(Bytes.toBytes(rowkey))
     put.addColumn(Bytes.toBytes(columnFamily), Bytes.toBytes(column), Bytes.toBytes(value))
@@ -84,9 +84,27 @@ object HBaseUtil {
     * @param tableName
     * @param rowkey
     * @param columnFamily
+    * @param columns
+    */
+  def insertMultiColMessageToHBase(tableName: String, rowkey: String, columnFamily: String,columns: Map[String,Any]): Unit ={
+    val table = getHbaseClient(tableName)
+    val put = new Put(Bytes.toBytes(rowkey))
+    for(entry <- columns){
+      val key = entry._1
+      val value = entry._2
+      put.addColumn(Bytes.toBytes(columnFamily), Bytes.toBytes(key),Bytes.toBytes(value.toString))
+    }
+    table.put(put)
+  }
+
+  /**
+    *
+    * @param tableName
+    * @param rowkey
+    * @param columnFamily
     * @param column
     */
-  def getMessageStrFromHBase(tableName: String, rowkey: String, columnFamily: String, column: String): String = {
+  def getMessageStrFromHBaseBySingleCol(tableName: String, rowkey: String, columnFamily: String, column: String): String = {
     val table = getHbaseClient(tableName)
     val get = new Get(rowkey.getBytes)
     val res = table.get(get).getValue(columnFamily.getBytes(), column.getBytes())
@@ -95,6 +113,26 @@ object HBaseUtil {
     }
     new String(res)
   }
+
+  /**
+    * 获取当行数据所有列
+    * @param tableName
+    * @param rowkey
+    * @param columnFamily
+    * @return
+    */
+  def getMessageStrFromHBaseByAllCol(tableName: String, rowkey: String, columnFamily: String): Map[String,String] = {
+    val table = getHbaseClient(tableName)
+    val get = new Get(rowkey.getBytes)
+    var res = Map[String,String]()
+    table.get(get).rawCells().foreach(cell=>{
+      val key = Bytes.toString(CellUtil.cloneQualifier(cell))
+      val value = Bytes.toString(CellUtil.cloneValue(cell))
+      res += (key -> value)
+    })
+    res
+  }
+
 
   /**
     * int类型递增序列的rowkey生成
