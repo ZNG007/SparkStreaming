@@ -6,6 +6,7 @@ import com.google.common.base.Stopwatch
 import com.hbzq.bigdata.spark.RealTimeTradeMonitor
 import com.hbzq.bigdata.spark.config.{ConfigurationManager, Constants}
 import com.hbzq.bigdata.spark.utils.{JsonUtil, RedisUtil}
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.log4j.Logger
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
@@ -18,18 +19,18 @@ import org.apache.spark.rdd.RDD
   * @version [v1.0] 
   *
   */
-class TdrzjmxOperator(var rdd: RDD[String],
+class TdrzjmxOperator(var rdd: RDD[ConsumerRecord[String, String]],
                       var exchangeMapBC: Broadcast[Map[String, BigDecimal]]) extends RddOperator {
 
   override def compute(): Array[(String, BigDecimal)] = {
 
     rdd
       .filter(message => {
-        message.contains("TDRZJMX")
+        message.topic().equalsIgnoreCase(ConfigurationManager.getProperty(Constants.KAFKA_TOPIC_TDRZJMX_NAME))
       })
       .coalesce(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM) / 2)
       .map(message => {
-        JsonUtil.parseKakfaRecordToTdrzjmxRecord(message)
+        JsonUtil.parseKakfaRecordToTdrzjmxRecord(message.value())
       })
       .filter(record => {
         record != null &&
@@ -59,7 +60,7 @@ object TdrzjmxOperator {
   val ZJZR: String = "zjzr"
   val ZJZC: String = "zjzc"
 
-  def apply(rdd: RDD[String],
+  def apply(rdd: RDD[ConsumerRecord[String, String]],
             exchangeMapBC: Broadcast[Map[String, BigDecimal]]
            ): TdrzjmxOperator = new TdrzjmxOperator(rdd, exchangeMapBC)
 }

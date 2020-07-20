@@ -18,18 +18,18 @@ import org.apache.spark.rdd.RDD
   * @version [v1.0] 
   *
   */
-class TkhxxOperator(var rdd: RDD[String]) extends RddOperator {
+class TkhxxOperator(var rdd: RDD[ConsumerRecord[String,String]]) extends RddOperator {
 
 
   override def compute(): Array[(String, Int)] = {
 
     rdd
       .filter(message => {
-        message.contains("TKHXX")
+        message.topic().equalsIgnoreCase(ConfigurationManager.getProperty(Constants.KAFKA_TOPIC_TKHXX_NAME))
       })
       .coalesce(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM) / 2)
       .map(message => {
-        JsonUtil.parseKakfaRecordToTkhxxRecord(message)
+        JsonUtil.parseKakfaRecordToTkhxxRecord(message.value())
       })
       .filter(record => {
         record != null &&
@@ -56,5 +56,5 @@ object TkhxxOperator {
   val GR: String = "gr"
   val QT: String = ""
 
-  def apply(rdd: RDD[String]): TkhxxOperator = new TkhxxOperator(rdd)
+  def apply(rdd: RDD[ConsumerRecord[String,String]]): TkhxxOperator = new TkhxxOperator(rdd)
 }

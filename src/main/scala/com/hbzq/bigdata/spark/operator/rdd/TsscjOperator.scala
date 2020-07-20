@@ -22,20 +22,20 @@ import org.apache.spark.storage.StorageLevel
   * @version [v1.0] 
   *
   */
-class TsscjOperator(var rdd: RDD[String],
+class TsscjOperator(var rdd: RDD[ConsumerRecord[String, String]],
                     var exchangeMapBC: Broadcast[Map[String, BigDecimal]]) extends RddOperator {
 
   override def compute(): Array[((String, String), (Int, BigDecimal, BigDecimal))] = {
     rdd
       .filter(message => {
-        message.contains("TSSCJ")
+        message.topic().equalsIgnoreCase(ConfigurationManager.getProperty(Constants.KAFKA_TOPIC_TSSCJ_NAME))
       })
       .coalesce(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM) / 2)
       .map(message => {
-        JsonUtil.parseKakfaRecordToTsscjRecord(message)
+        JsonUtil.parseKakfaRecordToTsscjRecord(message.value())
       })
       .filter(record => record != null && !"".equalsIgnoreCase(record.khh) &&
-        !"".equalsIgnoreCase(record.cjbh) && "O".equalsIgnoreCase(record.cxbz) )
+        !"".equalsIgnoreCase(record.cjbh) && "O".equalsIgnoreCase(record.cxbz))
       .map(record => {
         // 从hbase中获取channel
         val channel = getChannelFromHBase(record)
@@ -96,7 +96,7 @@ object TsscjOperator {
 
   val TSSCJ_KHH_PREFIX: String = "trade_monitor_tsscj_khh_"
 
-  def apply(rdd: RDD[String],
+  def apply(rdd: RDD[ConsumerRecord[String, String]],
             exchangeMapBC: Broadcast[Map[String, BigDecimal]]
            ): TsscjOperator = new TsscjOperator(rdd, exchangeMapBC)
 }

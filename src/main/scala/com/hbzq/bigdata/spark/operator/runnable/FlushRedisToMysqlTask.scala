@@ -133,7 +133,6 @@ class FlushRedisToMysqlTask() extends Runnable {
 
 object FlushRedisToMysqlTask {
   private var keys: Map[String, String] = Map()
-  var channels: Map[String, String] = Map()
   private val WT_CUST_COUNT: String = "wt_cust_count"
   private val CJ_CUST_COUNT: String = "cj_cust_count"
 
@@ -141,17 +140,9 @@ object FlushRedisToMysqlTask {
   private def init(): Unit = {
     keys += (WT_CUST_COUNT -> TdrwtOperator.TDRWT_KHH_PREFIX)
     keys += (CJ_CUST_COUNT -> TsscjOperator.TSSCJ_KHH_PREFIX)
-    channels += ("tdx" -> "通达信")
-    channels += ("ths" -> "同花顺")
-    channels += ("dzh" -> "大智慧")
-    channels += ("hbzt" -> "华宝智投")
-    channels += ("hbzq" -> "华宝证券")
-    channels += ("qt" -> "其他")
-    channels += ("undefine" -> "未定义")
   }
 
   def apply(): FlushRedisToMysqlTask = new FlushRedisToMysqlTask()
-
   init()
 }
 

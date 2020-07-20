@@ -32,6 +32,11 @@ object Constants {
   val KAFKA_AUTO_OFFSET_RESET="kafka.auto.offset.reset"
   val KAFKA_MYSQL_QUERY_OFFSET_SQL="kafka.mysql.query.offset.sql"
   val KAFKA_MYSQL_INSERT_OFFSET_SQL="kafka.mysql.insert.offset.sql"
+  val KAFKA_TOPIC_TWDWT_NAME="kafka.topic.twdwt.name"
+  val KAFKA_TOPIC_TDRZJMX_NAME="kafka.topic.tdrzjmx.name"
+  val KAFKA_TOPIC_TSSCJ_NAME="kafka.topic.tsscj.name"
+  val KAFKA_TOPIC_TKHXX_NAME="kafka.topic.tkhxx.name"
+  val KAFKA_TOPIC_TRADE_MONITOR_SLOW_NAME="kafka.topic.monitor.slow.name"
   // Redis
   val REDIS_HOSTS = "redis.hosts"
   val REDIS_MASTER = "redis.master"
@@ -50,10 +55,6 @@ object Constants {
   val FLUSH_REDIS_TO_MYSQL_SCHEDULE_INTERVAL ="redis.flush.mysql.schedule.interval"
 
   // HBase
-  /*val HBASE_ZOOKEEPER_QUORUM="hbase.zookeeper.quorum"
-  val HBASE_ZOOKEEPER_CLIENTPORT="hbase.zookeeper.client.port"
-  val HBASE_CLUSTER_DISTRIBUTED="hbase.cluster.distributed"
-  val HBASE_ZOOKEEPER_ZNODE_PARENT="hbase.zookeeper.znode.parent"*/
   val HBASE_TDRWT_WTH_TABLE="hbase.tdrwt.wth.table"
   val HBASE_WTH_INFO_FAMILY_COLUMNS="hbase.wth.info.family.columns"
 
@@ -62,7 +63,6 @@ object Constants {
   val MYSQL_UPSERT_NOW_TRADE_STATE_SQL = "mysql.upsert.now.trade.state.sql"
   val MYSQL_UPSERT_NEXT_TRADE_STATE_SQL = "mysql.upsert.next.trade.state.sql"
   val FLUSH_REDIS_TO_MYSQL_TRADE_STATE_KHH_SQL = "flush.redis.to.mysql.trade.state.khh.sql"
-  //val MYSQL_UPSERT_JYJ_STATE_SQL = "mysql.upsert.jyj.state.sql"
   val MYSQL_UPSERT_OTHER_STATE_SQL = "mysql.upsert.other.state.sql"
   val MYSQL_NEXT_TRADE_DAY_QUERY_SQL = "mysql.next.trade.day.query.sql"
 

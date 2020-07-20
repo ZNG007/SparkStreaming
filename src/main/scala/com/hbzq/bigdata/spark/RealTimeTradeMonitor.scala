@@ -5,7 +5,6 @@ import java.util.concurrent.{ScheduledExecutorService, TimeUnit}
 
 import com.hbzq.bigdata.spark.config.{ConfigurationManager, Constants}
 import com.hbzq.bigdata.spark.operator.rdd._
-import com.hbzq.bigdata.spark.operator.runnable.FlushRedisToMysqlTask.channels
 import com.hbzq.bigdata.spark.operator.runnable.{FlushRedisToMysqlTask, RedisDelKeyTask}
 import com.hbzq.bigdata.spark.utils._
 import org.apache.commons.lang.StringUtils
@@ -30,14 +29,11 @@ object RealTimeTradeMonitor {
   private[this] val logger = Logger.getLogger(RealTimeTradeMonitor.getClass)
 
   def main(args: Array[String]): Unit = {
-
     // 获取Kafka配置
     var (topics, kafkaParams) = ConfigurationManager.getKafkaConfig()
     // 启动  先删除Redis  key
     RedisDelKeyTask().run()
     var ssc: StreamingContext = startApp(topics, kafkaParams)
-    // 启动调度任务
-    //    val scheduler = startScheduleTask()
     if (!ssc.awaitTerminationOrTimeout(DateUtil.getDurationTime())) {
       logger.warn(
         s"""
@@ -46,7 +42,6 @@ object RealTimeTradeMonitor {
            |${LocalDateTime.now()}
            |====================
         """.stripMargin)
-      //      scheduler.shutdown()
       ssc.stop(true, true)
     }
   }
@@ -73,8 +68,7 @@ object RealTimeTradeMonitor {
       val offsetRanges = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
       // 提前过滤
       val inputRdd = rdd
-        .map(_.value())
-        .filter(message => StringUtils.isNotEmpty(message))
+        .filter(message => StringUtils.isNotEmpty(message.value()))
         .repartition(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM))
         .persist(StorageLevel.MEMORY_ONLY_SER)
       // 计算委托相关的业务  委托笔数  委托金额  (yyb , channel)
@@ -95,7 +89,7 @@ object RealTimeTradeMonitor {
           for ((yyb, channel) <- keys) {
             var (now_wt_tx_count, now_wt_tx_sum) = tdrwt.getOrElse((yyb, channel), (0, BigDecimal(0)))
             var (cj_tx_count, cj_tx_sum, jyj) = tsscj.getOrElse((yyb, channel), (0, BigDecimal(0), BigDecimal(0)))
-//            val _channel = channels.get(channel).get
+            //            val _channel = channels.get(channel).get
             if (now_wt_tx_count != 0 || cj_tx_count != 0) {
               nowTradeStates ::= (channel :: yyb :: now_wt_tx_count :: now_wt_tx_sum :: cj_tx_count :: cj_tx_sum :: jyj :: timestamp :: now :: channel :: yyb :: now_wt_tx_count :: now_wt_tx_sum :: cj_tx_count :: cj_tx_sum :: jyj :: timestamp :: now :: Nil)
             }
@@ -107,16 +101,6 @@ object RealTimeTradeMonitor {
             })
           }
         }
-        // jyj_state
-       /* var jyjStates: List[List[Any]] = List()
-        for (yyb: String <- tsscj_jyj.keySet) {
-          val jyj = tsscj_jyj.getOrElse(yyb, BigDecimal(0))
-          jyjStates ::= (yyb :: jyj :: timestamp :: now :: yyb :: jyj :: timestamp :: now :: Nil)
-        }
-        jyjStates.foreach(jyjState => {
-          SQL(ConfigurationManager.getProperty(Constants.MYSQL_UPSERT_JYJ_STATE_SQL))
-            .bind(jyjState: _*).update().apply()
-        })*/
         // other_state
         val new_jg_count = tkhxx.getOrElse(TkhxxOperator.GR, 0)
         val new_gr_count = tkhxx.getOrElse(TkhxxOperator.JG, 0)
@@ -144,23 +128,4 @@ object RealTimeTradeMonitor {
     ssc.start()
     ssc
   }
-
-  /**
-    * 调度任务
-    *
-    * @return
-    */
-  private def startScheduleTask(): ScheduledExecutorService = {
-    // 初始化Redis 删除Key调度线程池
-    val scheduler = ThreadUtil.getSingleScheduleThreadPool(1)
-    // Mysql数据同步调度线程池
-    scheduler.scheduleWithFixedDelay(FlushRedisToMysqlTask(),
-      30,
-      ConfigurationManager.getInt(Constants.FLUSH_REDIS_TO_MYSQL_SCHEDULE_INTERVAL),
-      TimeUnit.SECONDS
-    )
-    scheduler
-  }
-
-  private var channels: Map[String, String] = FlushRedisToMysqlTask.channels
 }

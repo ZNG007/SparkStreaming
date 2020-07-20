@@ -3,10 +3,9 @@ package com.hbzq.bigdata.spark.operator.rdd
 import com.hbzq.bigdata.spark.config.{ConfigurationManager, Constants}
 import com.hbzq.bigdata.spark.domain.TdrwtRecord
 import com.hbzq.bigdata.spark.utils.{DateUtil, HBaseUtil, JsonUtil, RedisUtil}
-import org.apache.commons.configuration.ConfigurationFactory.ConfigurationBuilder
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
-import org.apache.spark.storage.StorageLevel
 
 
 /**
@@ -17,17 +16,17 @@ import org.apache.spark.storage.StorageLevel
   * @version [v1.0] 
   *
   */
-class TdrwtOperator(var rdd: RDD[String],
+class TdrwtOperator(var rdd: RDD[ConsumerRecord[String,String]],
                     var exchangeMapBC: Broadcast[Map[String, BigDecimal]]) extends RddOperator {
 
   override def compute(): Array[((String,String), (Int, BigDecimal))] = {
     rdd
       .filter(message => {
-        message.contains("TDRWT")
+        message.topic().equalsIgnoreCase(ConfigurationManager.getProperty(Constants.KAFKA_TOPIC_TWDWT_NAME))
       })
       .coalesce(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM) / 2)
       .map(message => {
-        JsonUtil.parseKakfaRecordToTdrwtRecord(message)
+        JsonUtil.parseKakfaRecordToTdrwtRecord(message.value())
       })
       .filter(record => record != null &&
         !"".equalsIgnoreCase(record.khh) &&
@@ -77,7 +76,7 @@ object TdrwtOperator {
 
   val TDRWT_KHH_PREFIX: String = "trade_monitor_tdrwt_khh_"
 
-  def apply(rdd: RDD[String],
+  def apply(rdd: RDD[ConsumerRecord[String,String]],
             exchangeMapBC: Broadcast[Map[String, BigDecimal]]
            ): TdrwtOperator = new TdrwtOperator(rdd, exchangeMapBC)
 
