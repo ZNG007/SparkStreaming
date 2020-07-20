@@ -27,7 +27,7 @@ class TkhxxOperator(var rdd: RDD[String]) extends RddOperator {
       .filter(message => {
         message.contains("TKHXX")
       })
-      .coalesce(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM) / 4)
+      .coalesce(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM) / 2)
       .map(message => {
         JsonUtil.parseKakfaRecordToTkhxxRecord(message)
       })

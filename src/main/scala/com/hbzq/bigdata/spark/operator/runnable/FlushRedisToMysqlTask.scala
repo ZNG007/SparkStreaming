@@ -40,24 +40,27 @@ class FlushRedisToMysqlTask() extends Runnable {
     */
   private def processRealTradeKhhState(jedis: Jedis, keys: Map[String, String]) = {
     // 委托客户数
-    var wt_cust_count_map: Map[(Int, String), Int] = getSetSizeFromRedisWithPrefix(FlushRedisToMysqlTask.WT_CUST_COUNT,
+    var wt_cust_count_map: Map[(Int, String, String), Int] = getSetSizeFromRedisWithPrefix(FlushRedisToMysqlTask.WT_CUST_COUNT,
       keys, jedis)
 
     // 成交客户数
-    var cj_cust_count_map: Map[(Int, String), Int] = getSetSizeFromRedisWithPrefix(FlushRedisToMysqlTask.CJ_CUST_COUNT,
+    var cj_cust_count_map: Map[(Int, String, String), Int] = getSetSizeFromRedisWithPrefix(FlushRedisToMysqlTask.CJ_CUST_COUNT,
       keys, jedis)
 
     var res: List[List[Any]] = List()
     val now = DateUtil.getFormatNowDate()
-    for (channel: String <- FlushRedisToMysqlTask.channels.keySet) {
-      val _channel = FlushRedisToMysqlTask.channels.get(channel).get
-      val now_wt_cust_count = wt_cust_count_map.getOrElse((now, channel), 0)
-      val now_cj_cust_count = cj_cust_count_map.getOrElse((now, channel), 0)
-      if(now_wt_cust_count != 0 || now_cj_cust_count != 0){
-        res ::= (_channel :: now_wt_cust_count :: now_cj_cust_count :: now :: _channel :: now_wt_cust_count :: now_cj_cust_count :: now :: Nil)
+
+    if (!wt_cust_count_map.isEmpty || !cj_cust_count_map.isEmpty) {
+      val keys = wt_cust_count_map.keySet ++ cj_cust_count_map.keySet
+      for ((date, channel, yyb) <- keys) {
+//        val _channel = FlushRedisToMysqlTask.channels.get(channel).get
+        val now_wt_cust_count = wt_cust_count_map.getOrElse((date, channel, yyb), 0)
+        val now_cj_cust_count = cj_cust_count_map.getOrElse((date, channel, yyb), 0)
+        if (now_wt_cust_count != 0 || now_cj_cust_count != 0) {
+          res ::= (channel :: yyb :: now_wt_cust_count :: now_cj_cust_count :: now :: channel :: yyb :: now_wt_cust_count :: now_cj_cust_count :: now :: Nil)
+        }
       }
     }
-
     logger.warn(
       s"""
          |=========
@@ -79,16 +82,17 @@ class FlushRedisToMysqlTask() extends Runnable {
     * @param keys
     * @return
     */
-  def getSetSizeFromRedisWithPrefix(Prefix: String, keys: Map[String, String], jedis: Jedis): Map[(Int, String), Int] = {
-    var res: Map[(Int, String), Int] = Map()
+  def getSetSizeFromRedisWithPrefix(Prefix: String, keys: Map[String, String], jedis: Jedis): Map[(Int, String, String), Int] = {
+    var res: Map[(Int, String, String), Int] = Map()
     val keyPattrn = keys.get(Prefix).get
     val matchKeys = jedis.keys(s"${keyPattrn}*")
     matchKeys.asScala.foreach(key => {
-      val tempValue = jedis.bitcount(key)
-      val date = key.replace(keyPattrn, "").split("_")(1).toInt
-      val channel = key.replace(keyPattrn, "").split("_")(2)
-      val value = res.getOrElse((date, channel), 0) + tempValue
-      res += ((date, channel) -> value.toInt)
+      val tempValue = jedis.bitcount(key).toInt
+      val keys = key.replace(keyPattrn, "").split("_")
+      val date = keys(0).toInt
+      val yyb = keys(1)
+      val channel = keys(2)
+      res += ((date, channel, yyb) -> tempValue)
     })
     res
   }

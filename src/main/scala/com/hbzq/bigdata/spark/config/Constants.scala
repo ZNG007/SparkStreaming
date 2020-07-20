@@ -62,7 +62,7 @@ object Constants {
   val MYSQL_UPSERT_NOW_TRADE_STATE_SQL = "mysql.upsert.now.trade.state.sql"
   val MYSQL_UPSERT_NEXT_TRADE_STATE_SQL = "mysql.upsert.next.trade.state.sql"
   val FLUSH_REDIS_TO_MYSQL_TRADE_STATE_KHH_SQL = "flush.redis.to.mysql.trade.state.khh.sql"
-  val MYSQL_UPSERT_JYJ_STATE_SQL = "mysql.upsert.jyj.state.sql"
+  //val MYSQL_UPSERT_JYJ_STATE_SQL = "mysql.upsert.jyj.state.sql"
   val MYSQL_UPSERT_OTHER_STATE_SQL = "mysql.upsert.other.state.sql"
   val MYSQL_NEXT_TRADE_DAY_QUERY_SQL = "mysql.next.trade.day.query.sql"
 

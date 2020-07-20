@@ -65,9 +65,23 @@ object JsonUtil {
           val bz = after.get("BZ").getOrElse("")
           val wtsl = after.get("WTSL").getOrElse("0")
           val wtjg = BigDecimal(after.get("WTJG").getOrElse("0"))
+        val tdrwtRecord = TdrwtRecord(
+          khh,
+          wth,
+          yyb,
+          wtfs,
+          wtgy,
+          bz,
+          wtsl.toInt,
+          wtjg
+        )
+        val channel = tdrwtRecord.matchClassify(
+          RuleVaildUtil.getClassifyListByRuleName(Constants.RULE_TX_CHANNEL_CLASSIFY),
+          typeOf[TdrwtRecord])
+
         val data = Map(
           "KHH" -> khh,"WTH" -> wth,"YYB" -> yyb,
-          "WTFS" -> wtfs,"WTGY" ->wtgy,"BZ" -> bz,
+          "BZ" -> bz,"CHANNEL" -> channel,
           "WTSL" -> wtsl,"WTJG"->wtjg
         )
         // 将明细数据插入HBase
@@ -94,7 +108,7 @@ object JsonUtil {
             HBaseUtil.getRowKeyFromInteger(wth.toInt),
             ConfigurationManager.getProperty(Constants.HBASE_WTH_INFO_FAMILY_COLUMNS)
           )
-          val tdrwtRecord = TdrwtRecord(
+          TdrwtRecord(
             data.get("KHH").getOrElse(""),
             data.get("WTH").getOrElse("0"),
             data.get("YYB").getOrElse(""),
@@ -102,13 +116,9 @@ object JsonUtil {
             data.get("WTGY").getOrElse(""),
             data.get("BZ").getOrElse(""),
             data.get("WTSL").getOrElse("0").toInt,
-            BigDecimal(data.get("WTJG").getOrElse("0"))
+            BigDecimal(data.get("WTJG").getOrElse("0")),
+            data.get("CHANNEL").getOrElse("qt")
           )
-          val channel = tdrwtRecord.matchClassify(
-            RuleVaildUtil.getClassifyListByRuleName(Constants.RULE_TX_CHANNEL_CLASSIFY),
-            typeOf[TdrwtRecord])
-          tdrwtRecord.channel = channel
-          tdrwtRecord
         } else {
           null
         }

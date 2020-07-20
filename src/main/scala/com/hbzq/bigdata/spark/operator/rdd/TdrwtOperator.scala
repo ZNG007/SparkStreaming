@@ -20,7 +20,7 @@ import org.apache.spark.storage.StorageLevel
 class TdrwtOperator(var rdd: RDD[String],
                     var exchangeMapBC: Broadcast[Map[String, BigDecimal]]) extends RddOperator {
 
-  override def compute(): Array[(String, (Int, BigDecimal))] = {
+  override def compute(): Array[((String,String), (Int, BigDecimal))] = {
     rdd
       .filter(message => {
         message.contains("TDRWT")
@@ -34,7 +34,7 @@ class TdrwtOperator(var rdd: RDD[String],
         !"0".equalsIgnoreCase(record.wth)
       )
       .map(record => {
-        (record.channel, record)
+        ((record.yyb, record.channel), record)
       })
       .aggregateByKey((0, BigDecimal(0)))(
         (acc, record) => {
@@ -45,7 +45,7 @@ class TdrwtOperator(var rdd: RDD[String],
           val channel = record.channel
           // 更新客户号到Redis
           val jedis = RedisUtil.getConn()
-          jedis.setbit(s"${TdrwtOperator.TDRWT_KHH_PREFIX}${yyb}_${DateUtil.getFormatNowDate()}_$channel", tempKhh, true)
+          jedis.setbit(s"${TdrwtOperator.TDRWT_KHH_PREFIX}${DateUtil.getFormatNowDate()}_${yyb}_$channel", tempKhh, true)
           RedisUtil.closeConn(jedis)
           val exchange = exchangeMapBC.value.getOrElse(bz, BigDecimal(1))
           val wtje = record.wtsl * record.wtjg * exchange

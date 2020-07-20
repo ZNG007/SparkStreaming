@@ -25,8 +25,8 @@ import org.apache.spark.storage.StorageLevel
 class TsscjOperator(var rdd: RDD[String],
                     var exchangeMapBC: Broadcast[Map[String, BigDecimal]]) extends RddOperator {
 
-  override def compute(): (Array[(String, (Int, BigDecimal, BigDecimal))], Array[(String, BigDecimal)]) = {
-    val tsscjRdd = rdd
+  override def compute(): Array[((String, String), (Int, BigDecimal, BigDecimal))] = {
+    rdd
       .filter(message => {
         message.contains("TSSCJ")
       })
@@ -35,7 +35,7 @@ class TsscjOperator(var rdd: RDD[String],
         JsonUtil.parseKakfaRecordToTsscjRecord(message)
       })
       .filter(record => record != null && !"".equalsIgnoreCase(record.khh) &&
-        !"".equalsIgnoreCase(record.cjbh) && "O".equalsIgnoreCase(record.cxbz))
+        !"".equalsIgnoreCase(record.cjbh) && "O".equalsIgnoreCase(record.cxbz) )
       .map(record => {
         // 从hbase中获取channel
         val channel = getChannelFromHBase(record)
@@ -51,10 +51,7 @@ class TsscjOperator(var rdd: RDD[String],
            """.stripMargin)
         record
       })
-      .persist(StorageLevel.MEMORY_ONLY_SER)
-
-    // 按照委托方式   计算成交笔数   成交金额   佣金
-    val tsscjTrade: Array[(String, (Int, BigDecimal, BigDecimal))] = tsscjRdd.map(record => (record.channel, record))
+      .map(record => ((record.yyb, record.channel), record))
       .aggregateByKey((0, BigDecimal(0), BigDecimal(0)))(
         (acc, record) => {
           val bz = record.bz.toUpperCase
@@ -65,7 +62,7 @@ class TsscjOperator(var rdd: RDD[String],
           val channel = record.channel
           // 更新客户号到Redis
           val jedis = RedisUtil.getConn()
-          jedis.setbit(s"${TsscjOperator.TSSCJ_KHH_PREFIX}${yyb}_${DateUtil.getFormatNowDate()}_$channel", tempKhh, true)
+          jedis.setbit(s"${TsscjOperator.TSSCJ_KHH_PREFIX}${DateUtil.getFormatNowDate()}_${yyb}_$channel", tempKhh, true)
           RedisUtil.closeConn(jedis)
           val exchange = exchangeMapBC.value.getOrElse(bz, BigDecimal(1))
           val cjje = record.cjje * exchange
@@ -76,20 +73,6 @@ class TsscjOperator(var rdd: RDD[String],
         }
       )
       .collect()
-
-    // 按照营业部计算JYJ
-    val tsscjJyj: Array[(String, BigDecimal)] = tsscjRdd.map(record => (record.yyb, record))
-      .aggregateByKey((BigDecimal(0)))(
-        (acc, record) => {
-          val jyj = record.s1
-          (acc + jyj)
-        },
-        (p1, p2) => {
-          (p1 + p2)
-        }
-      )
-      .collect()
-    (tsscjTrade, tsscjJyj)
   }
 
   /**
@@ -102,7 +85,7 @@ class TsscjOperator(var rdd: RDD[String],
       ConfigurationManager.getProperty(Constants.HBASE_TDRWT_WTH_TABLE),
       HBaseUtil.getRowKeyFromInteger(record.wth.toInt),
       ConfigurationManager.getProperty(Constants.HBASE_WTH_INFO_FAMILY_COLUMNS),
-      "channel"
+      "CHANNEL"
     )
   }
 }

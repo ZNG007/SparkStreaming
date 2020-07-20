@@ -8,7 +8,7 @@ import scala.collection.JavaConverters._
 
 object RedisUtil {
 
-  private var pool: JedisSentinelPool = null
+  @volatile private  var  pool: JedisSentinelPool = null
   private var config: Map[String, Any] = ConfigurationManager.getRedisConfig()
 
   /**

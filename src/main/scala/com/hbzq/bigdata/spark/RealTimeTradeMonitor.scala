@@ -37,7 +37,7 @@ object RealTimeTradeMonitor {
     RedisDelKeyTask().run()
     var ssc: StreamingContext = startApp(topics, kafkaParams)
     // 启动调度任务
-//    val scheduler = startScheduleTask()
+    //    val scheduler = startScheduleTask()
     if (!ssc.awaitTerminationOrTimeout(DateUtil.getDurationTime())) {
       logger.warn(
         s"""
@@ -46,7 +46,7 @@ object RealTimeTradeMonitor {
            |${LocalDateTime.now()}
            |====================
         """.stripMargin)
-//      scheduler.shutdown()
+      //      scheduler.shutdown()
       ssc.stop(true, true)
     }
   }
@@ -77,34 +77,30 @@ object RealTimeTradeMonitor {
         .filter(message => StringUtils.isNotEmpty(message))
         .repartition(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM))
         .persist(StorageLevel.MEMORY_ONLY_SER)
-      // 计算委托相关的业务 委托笔数  委托金额  委托客户数
-      val tdrwt: Map[String ,(Int, BigDecimal)] = TdrwtOperator(inputRdd, exchangeMapBC).compute().toMap
+      // 计算委托相关的业务  委托笔数  委托金额  (yyb , channel)
+      val tdrwt: Map[(String, String), (Int, BigDecimal)] = TdrwtOperator(inputRdd, exchangeMapBC).compute().toMap
       // 新增客户数
       val tkhxx: Map[String, Int] = TkhxxOperator(inputRdd).compute().toMap
       // 计算客户转入转出
       val tdrzjmx: Map[String, BigDecimal] = TdrzjmxOperator(inputRdd, exchangeMapBC).compute().toMap
-      // 计算成交相关的业务 成交笔数  成交金额  成交客户数  佣金
-      val (tsscjTrade, tsscjJyj): (Array[(String, (Int, BigDecimal, BigDecimal))], Array[(String, BigDecimal)]) =
-        TsscjOperator(inputRdd, exchangeMapBC).compute()
-      val tsscj = tsscjTrade.toMap
-      val tsscj_jyj = tsscjJyj.toMap
+      // 计算成交相关的业务 成交笔数  成交金额  佣金   (yyb , channel)
+      val tsscj: Map[(String, String), (Int, BigDecimal, BigDecimal)] = TsscjOperator(inputRdd, exchangeMapBC).compute().toMap
+
       // 事物更新offset 及结果到Mysql
       DB.localTx(implicit session => {
         val timestamp = DateUtil.getNowTimestamp()
-        // tdrwt + tsscj  trade_state
-        // trd_chn,entr_tims,entr_amt,mtch_tims,mtch_amt,tot_cms,stat_time,date_id
         var nowTradeStates: List[List[Any]] = List()
-
         if (!tdrwt.isEmpty || !tsscj.isEmpty) {
-          for (channel <- channels.keySet) {
-            var (now_wt_tx_count, now_wt_tx_sum) = tdrwt.getOrElse(channel, (0, BigDecimal(0)))
-            var (cj_tx_count, cj_tx_sum, jyj) = tsscj.getOrElse(channel, (0, BigDecimal(0), BigDecimal(0)))
-            val _channel = channels.get(channel).get
+          val keys = tdrwt.keySet ++ tsscj.keySet;
+          for ((yyb, channel) <- keys) {
+            var (now_wt_tx_count, now_wt_tx_sum) = tdrwt.getOrElse((yyb, channel), (0, BigDecimal(0)))
+            var (cj_tx_count, cj_tx_sum, jyj) = tsscj.getOrElse((yyb, channel), (0, BigDecimal(0), BigDecimal(0)))
+//            val _channel = channels.get(channel).get
             if (now_wt_tx_count != 0 || cj_tx_count != 0) {
-              nowTradeStates ::= (_channel :: now_wt_tx_count :: now_wt_tx_sum :: cj_tx_count :: cj_tx_sum :: jyj :: timestamp :: now :: _channel :: now_wt_tx_count :: now_wt_tx_sum :: cj_tx_count :: cj_tx_sum :: jyj :: timestamp :: now :: Nil)
+              nowTradeStates ::= (channel :: yyb :: now_wt_tx_count :: now_wt_tx_sum :: cj_tx_count :: cj_tx_sum :: jyj :: timestamp :: now :: channel :: yyb :: now_wt_tx_count :: now_wt_tx_sum :: cj_tx_count :: cj_tx_sum :: jyj :: timestamp :: now :: Nil)
             }
           }
-          if(!nowTradeStates.isEmpty){
+          if (!nowTradeStates.isEmpty) {
             nowTradeStates.foreach(tradeState => {
               SQL(ConfigurationManager.getProperty(Constants.MYSQL_UPSERT_NOW_TRADE_STATE_SQL))
                 .bind(tradeState: _*).update().apply()
@@ -112,7 +108,7 @@ object RealTimeTradeMonitor {
           }
         }
         // jyj_state
-        var jyjStates: List[List[Any]] = List()
+       /* var jyjStates: List[List[Any]] = List()
         for (yyb: String <- tsscj_jyj.keySet) {
           val jyj = tsscj_jyj.getOrElse(yyb, BigDecimal(0))
           jyjStates ::= (yyb :: jyj :: timestamp :: now :: yyb :: jyj :: timestamp :: now :: Nil)
@@ -120,7 +116,7 @@ object RealTimeTradeMonitor {
         jyjStates.foreach(jyjState => {
           SQL(ConfigurationManager.getProperty(Constants.MYSQL_UPSERT_JYJ_STATE_SQL))
             .bind(jyjState: _*).update().apply()
-        })
+        })*/
         // other_state
         val new_jg_count = tkhxx.getOrElse(TkhxxOperator.GR, 0)
         val new_gr_count = tkhxx.getOrElse(TkhxxOperator.JG, 0)

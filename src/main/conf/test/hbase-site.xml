@@ -5,6 +5,10 @@
   <property>
     <name>hbase.rootdir</name>
     <value>hdfs://nameservice1/hbase</value>
+  </property> 
+  <property>
+    <name>hbase.replication</name>
+    <value>true</value>
   </property>
   <property>
     <name>hbase.client.write.buffer</name>
@@ -104,7 +108,7 @@
   </property>
   <property>
     <name>hbase.zookeeper.quorum</name>
-    <value>master02.hbzq.com,utility01.hbzq.com,master01.hbzq.com</value>
+    <value>nn01.hbzq.com,nn02.hbzq.com,ut01.hbzq.com</value>
   </property>
   <property>
     <name>hbase.zookeeper.property.clientPort</name>
@@ -127,23 +131,11 @@
     <value>hbase/_HOST@HBZQ.COM</value>
   </property>
   <property>
+    <name>hadoop.security.authorization</name>
+    <value>true</value>
+  </property>
+  <property>
     <name>hbase.rest.ssl.enabled</name>
     <value>false</value>
-  </property>
-  <property>
-    <name>phoenix.schema.isNamespaceMappingEnabled</name>
-    <value>true</value>
-  </property>
-  <property>
-    <name>phoenix.schema.mapSystemTablesToNamespace</name>
-    <value>true</value>
-  </property>
-  <property>
-    <name>phoenix.functions.allowUserDefinedFunctions</name>
-    <value>true</value>
-  </property>
-  <property>
-    <name>hbase.dynamic.jars.dir</name>
-    <value>/user/ids/hbase/lib</value>
   </property>
 </configuration>
