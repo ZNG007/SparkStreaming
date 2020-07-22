@@ -118,7 +118,7 @@ object RealTimeTradeMonitor {
           }
         })
         .filter(record => StringUtils.isNotEmpty(record._1))
-        .groupByKey()
+        .groupByKey(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM) / 4)
 
       val resultMap: Array[mutable.Map[String, Any]] = inputRdd.mapPartitions(records => {
 
@@ -184,6 +184,31 @@ object RealTimeTradeMonitor {
         var jedis: Jedis = null
         try {
           jedis = RedisUtil.getConn()
+
+
+          val tdrwtUpdateWths = tdrwtUpdateRecords.keySet
+          val tdrwtInsertWths = tdrwtInsertRecords.keySet
+          val tsscjWths = tsscjRecords.keySet
+          // tdrwt insert 与 update wth交集
+          val tdrwtMixWths = tdrwtUpdateWths & tdrwtInsertWths
+          // tdrwt  update wth独享集
+          val tdrwtOnlyUpdateWths = tdrwtUpdateWths -- tdrwtMixWths
+          // tsscj insert 与 update wth交集
+          val tsscjMixWths = tsscjWths & tdrwtInsertWths
+          // tsscj  update wth独享集
+          val tsscjOnlyWths = tsscjWths -- tsscjMixWths
+          val onlyWths = tsscjOnlyWths ++ tdrwtOnlyUpdateWths
+          // 批量获取Hbase中的  两个独享集里面的所有数据
+          val hbaseTdrwtReords: Map[String, Map[String, String]] = HBaseUtil.getRecordsFromHBaseByKeys(
+            ConfigurationManager.getProperty(Constants.HBASE_TDRWT_WTH_TABLE),
+            ConfigurationManager.getProperty(Constants.HBASE_WTH_INFO_FAMILY_COLUMNS),
+            onlyWths)
+
+          var tdrwtInsert = 0
+          var tdrwtHbase = 0
+          var tsscjInsert = 0
+          var tsscjHbase = 0
+
           // 计算tdrwt相关指标
           tdrwtUpdateRecords.foreach(entry => {
             val wth = entry._1
@@ -194,13 +219,8 @@ object RealTimeTradeMonitor {
             var yyb: String = null
             var wtsl: Int = 0
             var bz: String = null
-            if (tdrwtInsertRecords.keySet.contains(wth)) {
-              logger.info(
-                s"""
-                   |TDRWT
-                   |Get tdrwt detail from  Insert List
-                   |$wth
-              """.stripMargin)
+            if (tdrwtMixWths.contains(wth)) {
+              tdrwtInsert = tdrwtInsert + 1
               val tdrwtDetail = tdrwtInsertRecords.get(wth).get
               khh = tdrwtDetail.khh
               wtjg = tdrwtDetail.wtjg
@@ -209,18 +229,9 @@ object RealTimeTradeMonitor {
               wtsl = tdrwtDetail.wtsl
               bz = tdrwtDetail.bz
             } else {
-              logger.info(
-                s"""
-                   |TDRWT
-                   |Get tdrwt detail from HBase
-                   |$wth
-              """.stripMargin)
+              tdrwtHbase = tdrwtHbase + 1
               // HBase中获取
-              val data = HBaseUtil.getMessageStrFromHBaseByAllCol(
-                ConfigurationManager.getProperty(Constants.HBASE_TDRWT_WTH_TABLE),
-                HBaseUtil.getRowKeyFromInteger(wth.toInt),
-                ConfigurationManager.getProperty(Constants.HBASE_WTH_INFO_FAMILY_COLUMNS)
-              )
+              val data = hbaseTdrwtReords.get(wth).get
               khh = data.get("KHH").getOrElse("")
               yyb = data.get("YYB").getOrElse("")
               bz = data.get("BZ").getOrElse("")
@@ -228,9 +239,19 @@ object RealTimeTradeMonitor {
               wtjg = BigDecimal(data.get("WTJG").getOrElse("0"))
               channel = data.get("CHANNEL").getOrElse("qt")
             }
-            val tempKhh = khh.substring(4).toInt
-            // 更新Redis
-            jedis.setbit(s"${TdrwtOperator.TDRWT_KHH_PREFIX}${DateUtil.getFormatNowDate()}_${yyb}_$channel", tempKhh, true)
+            if (!"".equalsIgnoreCase(khh) && khh.length > 4) {
+              val tempKhh = khh.substring(4).toInt
+              // 更新Redis
+              jedis.setbit(s"${TdrwtOperator.TDRWT_KHH_PREFIX}${DateUtil.getFormatNowDate()}_${yyb}_$channel", tempKhh, true)
+            } else {
+              logger.error(
+                s"""
+                   |===================
+                   |TdrwtUpdate Operator khh is invaild....
+                   |$khh
+                   |===================
+                 """.stripMargin)
+            }
             val exchange = exchangeMapBC.value.getOrElse(bz, BigDecimal(1))
             val wtje = wtsl * wtjg * exchange
             val oldValue = tdrwt.getOrElse((yyb, channel), (0, BigDecimal(0)))
@@ -241,48 +262,62 @@ object RealTimeTradeMonitor {
             val wth = entry._1
             val tsscjRecord = entry._2
             var channel: String = tsscjRecord.channel
-            if (tdrwtInsertRecords.keySet.contains(wth)) {
-              logger.info(
-                s"""
-                   |TSSCJ
-                   |Get tdrwt detail from  Insert List
-                   |$wth
-              """.stripMargin)
+            if (tsscjMixWths.contains(wth)) {
+              tsscjInsert = tsscjInsert + 1
               val tdrwtDetail = tdrwtInsertRecords.get(wth).get
               channel = tdrwtDetail.channel
             } else {
-              logger.info(
-                s"""
-                   |TSSCJ
-                   |Get tdrwt detail from HBase
-                   |$wth
-              """.stripMargin)
+              tsscjHbase = tsscjHbase + 1
               // HBase中获取
-              val _channel = HBaseUtil.getMessageStrFromHBaseBySingleCol(
-                ConfigurationManager.getProperty(Constants.HBASE_TDRWT_WTH_TABLE),
-                HBaseUtil.getRowKeyFromInteger(wth.toInt),
-                ConfigurationManager.getProperty(Constants.HBASE_WTH_INFO_FAMILY_COLUMNS),
-                "CHANNEL"
-              )
-              if (StringUtils.isNotEmpty(_channel)) channel = _channel
+              val data = hbaseTdrwtReords.get(wth).get
+              channel = data.get("CHANNEL").getOrElse("undefine")
             }
             val bz = tsscjRecord.bz.toUpperCase
             val khh = tsscjRecord.khh
-            val tempKhh = khh.substring(4).toInt
             val yyb = tsscjRecord.yyb
             val jyj = tsscjRecord.s1
             // 更新Redis
-            jedis.setbit(s"${TsscjOperator.TSSCJ_KHH_PREFIX}${DateUtil.getFormatNowDate()}_${yyb}_$channel", tempKhh, true)
+            if (!"".equalsIgnoreCase(khh) && khh.length > 4) {
+              val tempKhh = khh.substring(4).toInt
+              jedis.setbit(s"${TsscjOperator.TSSCJ_KHH_PREFIX}${DateUtil.getFormatNowDate()}_${yyb}_$channel", tempKhh, true)
+            } else {
+              logger.error(
+                s"""
+                   |===================
+                   |TSSCJ Operator khh is invaild....
+                   |$khh
+                   |===================
+                 """.stripMargin)
+            }
+
             val exchange = exchangeMapBC.value.getOrElse(bz, BigDecimal(1))
             val cjje = tsscjRecord.cjje * exchange
             val oldValue = tsscj.getOrElse((yyb, channel), (0, BigDecimal(0), BigDecimal(0)))
             tsscj.put((yyb, channel), (oldValue._1 + 1, oldValue._2 + cjje, oldValue._3 + jyj))
           })
+
+          logger.info(
+            s"""
+               |===================
+               |Data get from
+               |tdrwtInsert : $tdrwtInsert
+               |tdrwtHbase  : $tdrwtHbase
+               |tsscjInsert : $tsscjInsert
+               |tsscjHbase  : $tsscjHbase
+               |===================
+             """.stripMargin)
+
+          hbaseTdrwtReords.clear()
         } catch {
           case ex: Exception => ex.printStackTrace()
         } finally {
           RedisUtil.closeConn(jedis)
         }
+
+        tdrwtInsertRecords.clear()
+        tdrwtUpdateRecords.clear()
+        tsscjRecords.clear()
+
         res += ("tdrwt" -> tdrwt)
         res += ("tsscj" -> tsscj)
         res += ("tdrzjmx" -> tdrzjmx)

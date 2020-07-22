@@ -7,11 +7,12 @@ import com.hbzq.bigdata.spark.config.Constants
 import com.hbzq.bigdata.spark.domain.TdrwtRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.hbase.{CellUtil, HBaseConfiguration, MasterNotRunningException, TableName}
-import org.apache.hadoop.hbase.client._
+import org.apache.hadoop.hbase.client.{Result, _}
 import org.apache.hadoop.hbase.util.Bytes
 
 import scala.collection.JavaConverters._
-
+import scala.collection.mutable
+import scala.collection.mutable.Map
 import scala.reflect.runtime.universe._
 
 /**
@@ -46,6 +47,7 @@ object CacheHbaseClient {
 }
 
 object HBaseUtil {
+
   //hbase 连接的参数
   val config: Configuration = HBaseConfiguration.create()
 
@@ -133,6 +135,43 @@ object HBaseUtil {
       put.addColumn(Bytes.toBytes(columnFamily), Bytes.toBytes(key), Bytes.toBytes(value.toString))
     }
     table.put(put)
+  }
+
+  /**
+    * 批量get数据
+    *
+    * @param tableName
+    * @param columnFamily
+    * @param onlyWths
+    * @return
+    */
+  def getRecordsFromHBaseByKeys(tableName: String, columnFamily: String, onlyWths: collection.Set[String]): Map[String, Map[String, String]] = {
+    import scala.collection.mutable.Map
+    var gets: List[Get] = List()
+    onlyWths.map(wth => getRowKeyFromInteger(wth.toInt))
+      .foreach(rowkey => {
+        val get = new Get(rowkey.getBytes)
+        gets ::= get
+      })
+    val table = getHbaseClient(tableName)
+    val results: List[Result] = table.get(gets.asJava).toList
+    var res: Map[String, Map[String, String]] = Map()
+    results.foreach(record => {
+      val hbaseData = parseHBaseRecordToMap(record, columnFamily)
+      val wth = hbaseData.get("WTH").getOrElse("0")
+      res.put(wth, hbaseData)
+    })
+    res
+  }
+
+  def parseHBaseRecordToMap(record: Result, columnFamily: String): scala.collection.mutable.Map[String, String] = {
+    var res = scala.collection.mutable.Map[String, String]()
+    record.rawCells().foreach(cell => {
+      val key = Bytes.toString(CellUtil.cloneQualifier(cell))
+      val value = Bytes.toString(CellUtil.cloneValue(cell))
+      res += (key -> value)
+    })
+    res
   }
 
   /**
