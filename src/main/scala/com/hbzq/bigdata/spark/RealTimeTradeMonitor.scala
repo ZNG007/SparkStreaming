@@ -1,18 +1,21 @@
 package com.hbzq.bigdata.spark
 
 import java.time.LocalDateTime
-import java.util.concurrent.{ScheduledExecutorService, TimeUnit}
 
 import com.hbzq.bigdata.spark.config.{ConfigurationManager, Constants}
+import com.hbzq.bigdata.spark.domain._
 import com.hbzq.bigdata.spark.operator.rdd._
 import com.hbzq.bigdata.spark.operator.runnable.{FlushRedisToMysqlTask, RedisDelKeyTask}
 import com.hbzq.bigdata.spark.utils._
 import org.apache.commons.lang.StringUtils
 import org.apache.log4j.Logger
-import org.apache.spark.storage.StorageLevel
 import org.apache.spark.streaming.StreamingContext
 import org.apache.spark.streaming.kafka010._
+import redis.clients.jedis.Jedis
 import scalikejdbc.{DB, SQL}
+
+import scala.collection.mutable
+import scala.util.Random
 
 
 /**
@@ -22,7 +25,7 @@ import scalikejdbc.{DB, SQL}
   * 实时交易监控程序入口
   *
   * @author hqbhoho
-  * @version [v1.0] 
+  * @version [v1.0]
   *
   */
 object RealTimeTradeMonitor {
@@ -70,15 +73,274 @@ object RealTimeTradeMonitor {
       val inputRdd = rdd
         .filter(message => StringUtils.isNotEmpty(message.value()))
         .repartition(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM))
-        .persist(StorageLevel.MEMORY_ONLY_SER)
+        .map(record => {
+          record.topic().toUpperCase match {
+            case "CIF_TKHXX" => {
+              val tkhxxRecord = JsonUtil.parseKakfaRecordToTkhxxRecord(record.value())
+              if (tkhxxRecord != null &&
+                !"".equalsIgnoreCase(tkhxxRecord.khh) &&
+                tkhxxRecord.khrq == DateUtil.getFormatNowDate() &&
+                !TkhxxOperator.QT.equalsIgnoreCase(tkhxxRecord.jgbz)) {
+                (Random.nextInt(10000).toString, tkhxxRecord)
+              } else {
+                ("", NullRecord())
+              }
+            }
+            case "SECURITIES_TSSCJ" => {
+              val tsscjRecord = JsonUtil.parseKakfaRecordToTsscjRecord(record.value())
+              if (tsscjRecord != null && !"".equalsIgnoreCase(tsscjRecord.khh) && !"0".equalsIgnoreCase(tsscjRecord.wth) &&
+                !"".equalsIgnoreCase(tsscjRecord.cjbh) && "O".equalsIgnoreCase(tsscjRecord.cxbz)) {
+                (tsscjRecord.wth, tsscjRecord)
+              } else {
+                ("", NullRecord())
+              }
+            }
+            case "ACCOUNT_TDRZJMX" => {
+              val tdrzjmxRecord = JsonUtil.parseKakfaRecordToTdrzjmxRecord(record.value())
+              if (tdrzjmxRecord != null &&
+                !"".equalsIgnoreCase(tdrzjmxRecord.khh) &&
+                !"".equalsIgnoreCase(tdrzjmxRecord.lsh)) {
+                (Random.nextInt(10000).toString, tdrzjmxRecord)
+              } else {
+                ("", NullRecord())
+              }
+
+            }
+            case "SECURITIES_TDRWT" => {
+              val tdrwtRecord = JsonUtil.parseKakfaRecordToTdrwtRecord(record.value())
+              if (tdrwtRecord != null &&
+                !"0".equalsIgnoreCase(tdrwtRecord.wth)) {
+                (tdrwtRecord.wth, tdrwtRecord)
+              } else {
+                ("", NullRecord())
+              }
+            }
+          }
+        })
+        .filter(record => StringUtils.isNotEmpty(record._1))
+        .groupByKey()
+
+      val resultMap: Array[mutable.Map[String, Any]] = inputRdd.mapPartitions(records => {
+
+        import scala.collection.mutable.Map
+
+        var res: Map[String, Any] = Map()
+        val tdrwtInsertRecords: Map[String, TdrwtRecord] = Map()
+        val tdrwtUpdateRecords: Map[String, TdrwtRecord] = Map()
+        val tsscjRecords: Map[String, TsscjRecord] = Map()
+        val tdrwt: Map[(String, String), (Int, BigDecimal)] = Map()
+        val tkhxx: Map[String, Int] = Map()
+        val tdrzjmx: Map[String, BigDecimal] = Map()
+        val tsscj: Map[(String, String), (Int, BigDecimal, BigDecimal)] = Map()
+
+        // 首先遍历一遍  针对不同的消息进行处理
+        records.foreach(recorditer => {
+          recorditer._2.foreach(record => {
+            record match {
+              // 客户信息表
+              case tkhxxRecord: TkhxxRecord => {
+                val oldValue = tkhxx.getOrElse(tkhxxRecord.jgbz, 0)
+                tkhxx.put(tkhxxRecord.jgbz, oldValue + 1)
+              }
+              // 实时成交表
+              case tsscjRecord: TsscjRecord => {
+                tsscjRecords.put(tsscjRecord.wth, tsscjRecord)
+              }
+              // 资金明细
+              case tdrzjmxRecord: TdrzjmxRecord => {
+                val bz = tdrzjmxRecord.bz.toUpperCase
+                val exchange = exchangeMapBC.value.getOrElse(bz, BigDecimal(1))
+                val opje = tdrzjmxRecord.je * exchange
+                val oldValue = tdrzjmx.getOrElse(tdrzjmxRecord.op, BigDecimal(0))
+                tdrzjmx.put(tdrzjmxRecord.op, oldValue + opje)
+              }
+              // 实时委托表
+              case tdrwtRecord: TdrwtRecord => {
+                tdrwtRecord.op match {
+                  case "INSERT" => tdrwtInsertRecords.put(tdrwtRecord.wth, tdrwtRecord)
+                  case "UPDATE" => tdrwtUpdateRecords.put(tdrwtRecord.wth, tdrwtRecord)
+                }
+              }
+              /*
+              先到但未关联到HBase中的数据的消息，重新将消息发回Kafka,并增加消息的版本信息,
+              默认如果被反复处理固定的次数，将不再关联,并按照未关联的默认值输出
+               */
+              case _ => {
+                // TODO 后续增加未关联Tsscj记录
+              }
+            }
+          })
+        })
+
+        // 分别处理 tdrwt, tsscj 两张表的记录
+        // 批量插入HBase
+        val puts = tdrwtInsertRecords.values
+          .map(tdrwtRecord =>
+            HBaseUtil.parseTdrwtToPut(tdrwtRecord, ConfigurationManager.getProperty(Constants.HBASE_WTH_INFO_FAMILY_COLUMNS))
+          )
+          .toList
+        HBaseUtil.BatchMultiColMessageToHBase(ConfigurationManager.getProperty(Constants.HBASE_TDRWT_WTH_TABLE), puts)
+
+        var jedis: Jedis = null
+        try {
+          jedis = RedisUtil.getConn()
+          // 计算tdrwt相关指标
+          tdrwtUpdateRecords.foreach(entry => {
+            val wth = entry._1
+            val tdrwtRecord = entry._2
+            var khh: String = null
+            var wtjg: BigDecimal = null
+            var channel: String = null
+            var yyb: String = null
+            var wtsl: Int = 0
+            var bz: String = null
+            if (tdrwtInsertRecords.keySet.contains(wth)) {
+              logger.info(
+                s"""
+                   |TDRWT
+                   |Get tdrwt detail from  Insert List
+                   |$wth
+              """.stripMargin)
+              val tdrwtDetail = tdrwtInsertRecords.get(wth).get
+              khh = tdrwtDetail.khh
+              wtjg = tdrwtDetail.wtjg
+              channel = tdrwtDetail.channel
+              yyb = tdrwtDetail.yyb
+              wtsl = tdrwtDetail.wtsl
+              bz = tdrwtDetail.bz
+            } else {
+              logger.info(
+                s"""
+                   |TDRWT
+                   |Get tdrwt detail from HBase
+                   |$wth
+              """.stripMargin)
+              // HBase中获取
+              val data = HBaseUtil.getMessageStrFromHBaseByAllCol(
+                ConfigurationManager.getProperty(Constants.HBASE_TDRWT_WTH_TABLE),
+                HBaseUtil.getRowKeyFromInteger(wth.toInt),
+                ConfigurationManager.getProperty(Constants.HBASE_WTH_INFO_FAMILY_COLUMNS)
+              )
+              khh = data.get("KHH").getOrElse("")
+              yyb = data.get("YYB").getOrElse("")
+              bz = data.get("BZ").getOrElse("")
+              wtsl = data.get("WTSL").getOrElse("0").toInt
+              wtjg = BigDecimal(data.get("WTJG").getOrElse("0"))
+              channel = data.get("CHANNEL").getOrElse("qt")
+            }
+            val tempKhh = khh.substring(4).toInt
+            // 更新Redis
+            jedis.setbit(s"${TdrwtOperator.TDRWT_KHH_PREFIX}${DateUtil.getFormatNowDate()}_${yyb}_$channel", tempKhh, true)
+            val exchange = exchangeMapBC.value.getOrElse(bz, BigDecimal(1))
+            val wtje = wtsl * wtjg * exchange
+            val oldValue = tdrwt.getOrElse((yyb, channel), (0, BigDecimal(0)))
+            tdrwt.put((yyb, channel), (oldValue._1 + 1, oldValue._2 + wtje))
+          })
+          // 计算Tsscj
+          tsscjRecords.foreach(entry => {
+            val wth = entry._1
+            val tsscjRecord = entry._2
+            var channel: String = tsscjRecord.channel
+            if (tdrwtInsertRecords.keySet.contains(wth)) {
+              logger.info(
+                s"""
+                   |TSSCJ
+                   |Get tdrwt detail from  Insert List
+                   |$wth
+              """.stripMargin)
+              val tdrwtDetail = tdrwtInsertRecords.get(wth).get
+              channel = tdrwtDetail.channel
+            } else {
+              logger.info(
+                s"""
+                   |TSSCJ
+                   |Get tdrwt detail from HBase
+                   |$wth
+              """.stripMargin)
+              // HBase中获取
+              val _channel = HBaseUtil.getMessageStrFromHBaseBySingleCol(
+                ConfigurationManager.getProperty(Constants.HBASE_TDRWT_WTH_TABLE),
+                HBaseUtil.getRowKeyFromInteger(wth.toInt),
+                ConfigurationManager.getProperty(Constants.HBASE_WTH_INFO_FAMILY_COLUMNS),
+                "CHANNEL"
+              )
+              if (StringUtils.isNotEmpty(_channel)) channel = _channel
+            }
+            val bz = tsscjRecord.bz.toUpperCase
+            val khh = tsscjRecord.khh
+            val tempKhh = khh.substring(4).toInt
+            val yyb = tsscjRecord.yyb
+            val jyj = tsscjRecord.s1
+            // 更新Redis
+            jedis.setbit(s"${TsscjOperator.TSSCJ_KHH_PREFIX}${DateUtil.getFormatNowDate()}_${yyb}_$channel", tempKhh, true)
+            val exchange = exchangeMapBC.value.getOrElse(bz, BigDecimal(1))
+            val cjje = tsscjRecord.cjje * exchange
+            val oldValue = tsscj.getOrElse((yyb, channel), (0, BigDecimal(0), BigDecimal(0)))
+            tsscj.put((yyb, channel), (oldValue._1 + 1, oldValue._2 + cjje, oldValue._3 + jyj))
+          })
+        } catch {
+          case ex: Exception => ex.printStackTrace()
+        } finally {
+          RedisUtil.closeConn(jedis)
+        }
+        res += ("tdrwt" -> tdrwt)
+        res += ("tsscj" -> tsscj)
+        res += ("tdrzjmx" -> tdrzjmx)
+        res += ("tkhxx" -> tkhxx)
+        List(res).iterator
+      }).collect()
+
+      import scala.collection.mutable.Map
+
       // 计算委托相关的业务  委托笔数  委托金额  (yyb , channel)
-      val tdrwt: Map[(String, String), (Int, BigDecimal)] = TdrwtOperator(inputRdd, exchangeMapBC).compute().toMap
+      val tdrwt: Map[(String, String), (Int, BigDecimal)] = Map()
       // 新增客户数
-      val tkhxx: Map[String, Int] = TkhxxOperator(inputRdd).compute().toMap
+      val tkhxx: Map[String, Int] = Map()
       // 计算客户转入转出
-      val tdrzjmx: Map[String, BigDecimal] = TdrzjmxOperator(inputRdd, exchangeMapBC).compute().toMap
+      val tdrzjmx: Map[String, BigDecimal] = Map()
       // 计算成交相关的业务 成交笔数  成交金额  佣金   (yyb , channel)
-      val tsscj: Map[(String, String), (Int, BigDecimal, BigDecimal)] = TsscjOperator(inputRdd, exchangeMapBC).compute().toMap
+      val tsscj: Map[(String, String), (Int, BigDecimal, BigDecimal)] = Map()
+
+      resultMap.foreach(resMap => {
+        resMap.foreach(entry => {
+          val resKey = entry._1
+          val resValue = entry._2
+          resKey match {
+            case "tdrwt" => {
+              resValue.asInstanceOf[Map[(String, String), (Int, BigDecimal)]].foreach(entry => {
+                val key = entry._1
+                val value = entry._2
+                val oleValue = tdrwt.getOrElse(key, (0, BigDecimal(0)))
+                tdrwt.put(key, (oleValue._1 + value._1, oleValue._2 + value._2))
+              })
+            }
+            case "tsscj" => {
+              resValue.asInstanceOf[Map[(String, String), (Int, BigDecimal, BigDecimal)]].foreach(entry => {
+                val key = entry._1
+                val value = entry._2
+                val oleValue = tsscj.getOrElse(key, (0, BigDecimal(0), BigDecimal(0)))
+                tsscj.put(key, (oleValue._1 + value._1, oleValue._2 + value._2, oleValue._3 + value._3))
+              })
+            }
+            case "tdrzjmx" => {
+              resValue.asInstanceOf[Map[String, BigDecimal]].foreach(entry => {
+                val key = entry._1
+                val value = entry._2
+                val oleValue = tdrzjmx.getOrElse(key, BigDecimal(0))
+                tdrzjmx.put(key, oleValue + value)
+              })
+            }
+            case "tkhxx" => {
+              resValue.asInstanceOf[Map[String, Int]].foreach(entry => {
+                val key = entry._1
+                val value = entry._2
+                val oleValue = tkhxx.getOrElse(key, 0)
+                tkhxx.put(key, oleValue + value)
+              })
+            }
+          }
+        })
+      })
 
       // 事物更新offset 及结果到Mysql
       DB.localTx(implicit session => {

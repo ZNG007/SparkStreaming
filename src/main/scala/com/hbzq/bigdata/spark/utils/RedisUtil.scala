@@ -6,7 +6,7 @@ import redis.clients.jedis.{Jedis, JedisPoolConfig, JedisSentinelPool}
 
 import scala.collection.JavaConverters._
 
-object RedisUtil {
+ object  RedisUtil {
 
   @volatile private  var  pool: JedisSentinelPool = null
   private var config: Map[String, Any] = ConfigurationManager.getRedisConfig()

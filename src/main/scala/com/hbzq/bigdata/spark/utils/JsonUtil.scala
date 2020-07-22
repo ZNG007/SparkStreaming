@@ -8,6 +8,7 @@ import com.hbzq.bigdata.spark.operator.rdd.{TdrzjmxOperator, TkhxxOperator}
 import com.owlike.genson.defaultGenson._
 import org.apache.commons.io.FileUtils
 import org.apache.commons.lang.StringUtils
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.log4j.Logger
 
 import scala.reflect.runtime.universe._
@@ -66,6 +67,7 @@ object JsonUtil {
         val wtsl = after.get("WTSL").getOrElse("0")
         val wtjg = BigDecimal(after.get("WTJG").getOrElse("0"))
         val tdrwtRecord = TdrwtRecord(
+          op,
           khh,
           wth,
           yyb,
@@ -78,46 +80,26 @@ object JsonUtil {
         val channel = tdrwtRecord.matchClassify(
           RuleVaildUtil.getClassifyListByRuleName(Constants.RULE_TX_CHANNEL_CLASSIFY),
           typeOf[TdrwtRecord])
-
-        val data = Map(
-          "KHH" -> khh, "WTH" -> wth, "YYB" -> yyb,
-          "BZ" -> bz, "CHANNEL" -> channel,
-          "WTSL" -> wtsl, "WTJG" -> wtjg
-        )
-        // 将明细数据插入HBase
-        HBaseUtil.insertMultiColMessageToHBase(
-          ConfigurationManager.getProperty(Constants.HBASE_TDRWT_WTH_TABLE),
-          HBaseUtil.getRowKeyFromInteger(wth.toInt),
-          ConfigurationManager.getProperty(Constants.HBASE_WTH_INFO_FAMILY_COLUMNS),
-          data
-        )
-        null
+        tdrwtRecord.channel = channel
+        tdrwtRecord
       }
       // UPDATE消息
       case "UPDATE" => {
-
         val before_jgsm = before.get("JGSM").getOrElse("").trim
         val after_jgsm = after.get("JGSM").getOrElse("").trim
-        val wth = before.get("WTH").getOrElse("0").toInt
-
+        val wth = before.get("WTH").getOrElse("0")
         val before_jgsm_list = List("待申报", "申报中")
         if (after_jgsm.equalsIgnoreCase("已申报") && before_jgsm_list.contains(before_jgsm)) {
-          // 从HBase中获取数据
-          val data = HBaseUtil.getMessageStrFromHBaseByAllCol(
-            ConfigurationManager.getProperty(Constants.HBASE_TDRWT_WTH_TABLE),
-            HBaseUtil.getRowKeyFromInteger(wth.toInt),
-            ConfigurationManager.getProperty(Constants.HBASE_WTH_INFO_FAMILY_COLUMNS)
-          )
           TdrwtRecord(
-            data.get("KHH").getOrElse(""),
-            data.get("WTH").getOrElse("0"),
-            data.get("YYB").getOrElse(""),
+            op,
+            "",
+            wth,
             "",
             "",
-            data.get("BZ").getOrElse(""),
-            data.get("WTSL").getOrElse("0").toInt,
-            BigDecimal(data.get("WTJG").getOrElse("0")),
-            data.get("CHANNEL").getOrElse("qt")
+            "",
+            "",
+            0,
+            BigDecimal(0)
           )
         } else {
           null
@@ -135,7 +117,8 @@ object JsonUtil {
     * @param message
     * @return
     */
-  def parseKakfaRecordToTsscjRecord(message: String): TsscjRecord = {
+  def parseKakfaRecordToTsscjRecord(message:String): TsscjRecord = {
+
     val (op, after) = parseAfterJsonStringToMap(message)
     if (!"INSERT".equalsIgnoreCase(op) || after.isEmpty) {
       return null
@@ -161,6 +144,7 @@ object JsonUtil {
     * @return
     */
   def parseKakfaRecordToTkhxxRecord(message: String): TkhxxRecord = {
+
     val (op, after) = parseAfterJsonStringToMap(message)
     if (!"INSERT".equalsIgnoreCase(op) || after.isEmpty) {
       return null
@@ -191,7 +175,8 @@ object JsonUtil {
     * @param message
     * @return
     */
-  def parseKakfaRecordToTdrzjmxRecord(message: String): TdrzjmxRecord = {
+  def parseKakfaRecordToTdrzjmxRecord(message:String): TdrzjmxRecord = {
+
     val (op, after) = parseAfterJsonStringToMap(message)
     if (!"INSERT".equalsIgnoreCase(op) || after.isEmpty) {
       return null

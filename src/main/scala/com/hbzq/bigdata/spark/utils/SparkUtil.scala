@@ -48,7 +48,8 @@ object SparkUtil {
         classOf[TsscjRecord],
         classOf[TkhxxRecord],
         classOf[TdrzjmxRecord],
-        classOf[ConsumerRecord[String,String]]
+        classOf[ConsumerRecord[String,String]],
+        classOf[DeadRecord]
       )
     )
 

@@ -4,8 +4,10 @@ import com.hbzq.bigdata.spark.config.{ConfigurationManager, Constants}
 import com.hbzq.bigdata.spark.domain.TdrwtRecord
 import com.hbzq.bigdata.spark.utils.{DateUtil, HBaseUtil, JsonUtil, RedisUtil}
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.log4j.Logger
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
+import org.apache.spark.storage.StorageLevel
 
 
 /**
@@ -16,11 +18,11 @@ import org.apache.spark.rdd.RDD
   * @version [v1.0] 
   *
   */
-class TdrwtOperator(var rdd: RDD[ConsumerRecord[String,String]],
+class TdrwtOperator(var rdd: RDD[ConsumerRecord[String, String]],
                     var exchangeMapBC: Broadcast[Map[String, BigDecimal]]) extends RddOperator {
 
-  override def compute(): Array[((String,String), (Int, BigDecimal))] = {
-    rdd
+  override def compute(): Array[((String, String), (Int, BigDecimal))] = {
+    val inputRdd = rdd
       .filter(message => {
         message.topic().equalsIgnoreCase(ConfigurationManager.getProperty(Constants.KAFKA_TOPIC_TWDWT_NAME))
       })
@@ -29,10 +31,87 @@ class TdrwtOperator(var rdd: RDD[ConsumerRecord[String,String]],
         JsonUtil.parseKakfaRecordToTdrwtRecord(message.value())
       })
       .filter(record => record != null &&
-        !"".equalsIgnoreCase(record.khh) &&
         !"0".equalsIgnoreCase(record.wth)
       )
+      .persist(StorageLevel.MEMORY_ONLY_SER)
+    // INSERT消息批量插入Hbase
+    inputRdd
+      .filter(record => record.op.equalsIgnoreCase("INSERT"))
+      .foreachPartition(
+        records => {
+          val puts = records.toList
+            .map(record =>
+              HBaseUtil.parseTdrwtToPut(record, ConfigurationManager.getProperty(Constants.HBASE_WTH_INFO_FAMILY_COLUMNS))
+            )
+          HBaseUtil.BatchMultiColMessageToHBase(ConfigurationManager.getProperty(Constants.HBASE_TDRWT_WTH_TABLE), puts)
+        }
+      )
+    // 处理update消息
+    inputRdd
+      .map(record => (record.wth, record))
+      .groupByKey()
+      .mapPartitions[TdrwtRecord](records => {
+      import scala.collection.mutable.Map
+      val tdrwtInfos = Map[String, TdrwtRecord]()
+      var resList: List[TdrwtRecord] = List()
+      for ((wth, tdrwtRecords) <- records) {
+        tdrwtRecords.filter(_.op.equalsIgnoreCase("INSERT")).foreach(record => {
+          tdrwtInfos.put(wth, record)
+          TdrwtOperator.logger.info(
+            s"""
+               |Add Tdrwt detail to Map
+               |$wth
+               |
+              """.stripMargin)
+        })
+        for (tdrwtRecord <- tdrwtRecords) {
+          // 从同一批消息获取
+          if (tdrwtRecord.op.equalsIgnoreCase("UPDATE")) {
+            val tdrwtDetail = tdrwtInfos.getOrElse(wth, null)
+            if (tdrwtDetail != null) {
+              TdrwtOperator.logger.info(
+                s"""
+                   |Get Tdrwt detail from Map
+                   |$wth
+                   |
+              """.stripMargin)
+              tdrwtRecord.khh = tdrwtDetail.khh
+              tdrwtRecord.wtjg = tdrwtDetail.wtjg
+              tdrwtRecord.channel = tdrwtDetail.channel
+              tdrwtRecord.yyb = tdrwtDetail.yyb
+              tdrwtRecord.wtsl = tdrwtDetail.wtsl
+              tdrwtRecord.bz = tdrwtDetail.bz
+              resList ::= tdrwtRecord
+            } else {
+              // HBase中获取
+              val data = HBaseUtil.getMessageStrFromHBaseByAllCol(
+                ConfigurationManager.getProperty(Constants.HBASE_TDRWT_WTH_TABLE),
+                HBaseUtil.getRowKeyFromInteger(wth.toInt),
+                ConfigurationManager.getProperty(Constants.HBASE_WTH_INFO_FAMILY_COLUMNS)
+              )
+
+              TdrwtOperator.logger.info(
+                s"""
+                   |Get Tdrwt detail from HBase
+                   |$wth
+                   |
+                 """.stripMargin)
+
+              tdrwtRecord.khh = data.get("KHH").getOrElse("")
+              tdrwtRecord.yyb = data.get("YYB").getOrElse("")
+              tdrwtRecord.bz = data.get("BZ").getOrElse("")
+              tdrwtRecord.wtsl = data.get("WTSL").getOrElse("0").toInt
+              tdrwtRecord.wtjg = BigDecimal(data.get("WTJG").getOrElse("0"))
+              tdrwtRecord.channel = data.get("CHANNEL").getOrElse("qt")
+              resList ::= tdrwtRecord
+            }
+          }
+        }
+      }
+      resList.iterator
+    })
       .map(record => {
+
         ((record.yyb, record.channel), record)
       })
       .aggregateByKey((0, BigDecimal(0)))(
@@ -74,9 +153,11 @@ class TdrwtOperator(var rdd: RDD[ConsumerRecord[String,String]],
 
 object TdrwtOperator {
 
+  val logger = Logger.getLogger(TdrwtOperator.getClass)
+
   val TDRWT_KHH_PREFIX: String = "trade_monitor_tdrwt_khh_"
 
-  def apply(rdd: RDD[ConsumerRecord[String,String]],
+  def apply(rdd: RDD[ConsumerRecord[String, String]],
             exchangeMapBC: Broadcast[Map[String, BigDecimal]]
            ): TdrwtOperator = new TdrwtOperator(rdd, exchangeMapBC)
 

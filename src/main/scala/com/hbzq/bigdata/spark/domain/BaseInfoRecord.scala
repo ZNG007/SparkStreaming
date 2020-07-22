@@ -8,7 +8,7 @@ package com.hbzq.bigdata.spark.domain
   * @version [v1.0] 
   *
   */
-trait BaseInfoRecord {
+trait BaseInfoRecord extends BaseRecord{
 }
 
 // CUSTOMER.TKHXX  KHH, KHRQ, JGBZ
@@ -24,3 +24,5 @@ case class TsscjRecord(var khh: String, var cjbh: String
                        , var yyb: String, var bz: String, var cjje: BigDecimal,
                        var s1: BigDecimal, var cxbz: String, var wth: String, var channel: String = "undefine"
                       ) extends BaseInfoRecord
+
+case class DeadRecord() extends BaseRecord

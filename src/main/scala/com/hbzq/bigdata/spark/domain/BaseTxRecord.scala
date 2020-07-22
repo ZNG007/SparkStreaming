@@ -11,7 +11,7 @@ import scala.util.control.Breaks
   * @version [v1.0] 
   *
   */
-trait BaseTxRecord {
+trait BaseTxRecord extends BaseRecord{
 
 
   /**
@@ -60,7 +60,7 @@ trait BaseTxRecord {
 }
 
 // TDRWT   "KHH","WTH","YYB","WTFS", "WTGY","BZ","WTSL","WTJG"
-case class TdrwtRecord(var khh: String, var wth: String
+case class TdrwtRecord(var op:String,var khh: String, var wth: String
                        , var yyb: String, var wtfs: String, var wtgy: String,
                        var bz: String, var wtsl: Int, var wtjg: BigDecimal,
                        var channel: String = "qt") extends BaseTxRecord
