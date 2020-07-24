@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit
 import com.google.common.base.Stopwatch
 import com.hbzq.bigdata.spark.RealTimeTradeMonitor
 import com.hbzq.bigdata.spark.config.{ConfigurationManager, Constants}
-import com.hbzq.bigdata.spark.utils.{JsonUtil, RedisUtil}
+import com.hbzq.bigdata.spark.utils.{JsonUtil, JsonUtilV2, RedisUtil}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.log4j.Logger
 import org.apache.spark.broadcast.Broadcast
@@ -30,7 +30,7 @@ class TdrzjmxOperator(var rdd: RDD[ConsumerRecord[String, String]],
       })
       .coalesce(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM) / 2)
       .map(message => {
-        JsonUtil.parseKakfaRecordToTdrzjmxRecord(message.value())
+        JsonUtilV2.parseKakfaRecordToTdrzjmxRecord(message.value())
       })
       .filter(record => {
         record != null &&

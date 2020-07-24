@@ -4,7 +4,7 @@ import java.io.{FileInputStream, IOException, InputStream}
 import java.util.Properties
 
 import com.hbzq.bigdata.spark.utils.JsonUtil
-import org.apache.kafka.common.serialization.StringDeserializer
+import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
 
 
 /**
@@ -133,10 +133,13 @@ object ConfigurationManager {
     val kafkaParams = Map[String, Object](
       "bootstrap.servers" -> ConfigurationManager.getProperty(Constants.KAFKA_BOOTSTRAP_SERVERS),
       "key.deserializer" -> classOf[StringDeserializer],
+      "key.serializer" -> classOf[StringSerializer],
       "value.deserializer" -> classOf[StringDeserializer],
+      "value.serializer" -> classOf[StringSerializer],
       "group.id" -> ConfigurationManager.getProperty(Constants.KAFKA_GROUP_ID),
       "auto.offset.reset" -> ConfigurationManager.getProperty(Constants.KAFKA_AUTO_OFFSET_RESET),
-      "enable.auto.commit" -> (false: java.lang.Boolean)
+      "enable.auto.commit" -> (false: java.lang.Boolean),
+      "acks" -> "-1"
     )
     (topics, kafkaParams)
   }

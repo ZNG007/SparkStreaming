@@ -4,7 +4,7 @@ import java.util.concurrent.TimeUnit
 
 import com.google.common.base.Stopwatch
 import com.hbzq.bigdata.spark.config.{ConfigurationManager, Constants}
-import com.hbzq.bigdata.spark.utils.{DateUtil, JsonUtil, RedisUtil}
+import com.hbzq.bigdata.spark.utils.{DateUtil, JsonUtil, JsonUtilV2, RedisUtil}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.log4j.Logger
 import org.apache.spark.broadcast.Broadcast
@@ -29,7 +29,7 @@ class TkhxxOperator(var rdd: RDD[ConsumerRecord[String,String]]) extends RddOper
       })
       .coalesce(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM) / 2)
       .map(message => {
-        JsonUtil.parseKakfaRecordToTkhxxRecord(message.value())
+        JsonUtilV2.parseKakfaRecordToTkhxxRecord(message.value())
       })
       .filter(record => {
         record != null &&

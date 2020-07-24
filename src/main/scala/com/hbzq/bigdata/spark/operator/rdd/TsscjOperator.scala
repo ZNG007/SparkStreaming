@@ -32,7 +32,7 @@ class TsscjOperator(var rdd: RDD[ConsumerRecord[String, String]],
       })
       .coalesce(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM) / 2)
       .map(message => {
-        JsonUtil.parseKakfaRecordToTsscjRecord(message.value())
+        JsonUtilV2.parseKakfaRecordToTsscjRecord(message.value())
       })
       .filter(record => record != null && !"".equalsIgnoreCase(record.khh) &&
         !"".equalsIgnoreCase(record.cjbh) && "O".equalsIgnoreCase(record.cxbz))

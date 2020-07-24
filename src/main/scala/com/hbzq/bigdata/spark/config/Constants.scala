@@ -32,7 +32,7 @@ object Constants {
   val KAFKA_AUTO_OFFSET_RESET="kafka.auto.offset.reset"
   val KAFKA_MYSQL_QUERY_OFFSET_SQL="kafka.mysql.query.offset.sql"
   val KAFKA_MYSQL_INSERT_OFFSET_SQL="kafka.mysql.insert.offset.sql"
-  val KAFKA_TOPIC_TWDWT_NAME="kafka.topic.twdwt.name"
+  val KAFKA_TOPIC_TDRWT_NAME="kafka.topic.tdrwt.name"
   val KAFKA_TOPIC_TDRZJMX_NAME="kafka.topic.tdrzjmx.name"
   val KAFKA_TOPIC_TSSCJ_NAME="kafka.topic.tsscj.name"
   val KAFKA_TOPIC_TKHXX_NAME="kafka.topic.tkhxx.name"
@@ -68,4 +68,8 @@ object Constants {
 
   // stop job
   val APP_STOP_HOUR ="app.stop.hour"
+
+  // tsscj 未关联次数阀值
+  val TSSCJ_LIFE_CYCLE_THRESHOLD="tsscj.life.cycle.threshold"
+
 }

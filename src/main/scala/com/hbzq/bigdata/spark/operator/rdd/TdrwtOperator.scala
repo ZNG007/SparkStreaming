@@ -2,7 +2,7 @@ package com.hbzq.bigdata.spark.operator.rdd
 
 import com.hbzq.bigdata.spark.config.{ConfigurationManager, Constants}
 import com.hbzq.bigdata.spark.domain.TdrwtRecord
-import com.hbzq.bigdata.spark.utils.{DateUtil, HBaseUtil, JsonUtil, RedisUtil}
+import com.hbzq.bigdata.spark.utils._
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.log4j.Logger
 import org.apache.spark.broadcast.Broadcast
@@ -24,11 +24,11 @@ class TdrwtOperator(var rdd: RDD[ConsumerRecord[String, String]],
   override def compute(): Array[((String, String), (Int, BigDecimal))] = {
     val inputRdd = rdd
       .filter(message => {
-        message.topic().equalsIgnoreCase(ConfigurationManager.getProperty(Constants.KAFKA_TOPIC_TWDWT_NAME))
+        message.topic().equalsIgnoreCase(ConfigurationManager.getProperty(Constants.KAFKA_TOPIC_TDRWT_NAME))
       })
       .coalesce(ConfigurationManager.getInt(Constants.SPARK_CUSTOM_PARALLELISM) / 2)
       .map(message => {
-        JsonUtil.parseKakfaRecordToTdrwtRecord(message.value())
+        JsonUtilV2.parseKakfaRecordToTdrwtRecord(message.value())
       })
       .filter(record => record != null &&
         !"0".equalsIgnoreCase(record.wth)
