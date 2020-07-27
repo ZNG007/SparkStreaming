@@ -138,7 +138,7 @@ object BaseRecordOperator {
       // 计算tdrwt相关指标
       computeTdrwtUpdateRecord(tdrwtUpdateRecords, tdrwtInsertRecords, tdrwtMixWths, hbaseTdrwtReords, exchangeMapBC, tdrwt, jedis)
       // 计算Tsscj
-      slowMessageList ::= computeTsscjRecord(tsscjRecords, tdrwtInsertRecords, tsscjMixWths, hbaseTdrwtReords, exchangeMapBC, tsscj, jedis)
+      slowMessageList :::= computeTsscjRecord(tsscjRecords, tdrwtInsertRecords, tsscjMixWths, hbaseTdrwtReords, exchangeMapBC, tsscj, jedis)
     } catch {
       case ex: Exception => ex.printStackTrace()
     } finally {
@@ -187,7 +187,8 @@ object BaseRecordOperator {
                          jedis: Jedis):List[SlowMessageRecord] = {
     var slowMessageList: List[SlowMessageRecord] = List()
     tsscjRecords.foreach(entry => {
-      val wth = entry._1
+      // key ： wth_cjbh
+      val wth = entry._1.split("_")(0)
       val tsscjRecord = entry._2
       var channel: String = tsscjRecord.channel
       var flag = true
@@ -206,14 +207,12 @@ object BaseRecordOperator {
           val version = tsscjRecord.version
           flag = version match {
             case version if (version < threshold) => {
-              logger.info(s"R1-3 $tsscjRecord  ")
               tsscjRecord.version = version + 1
               val slowMessage = SlowMessageRecord("SECURITIES_TSSCJ", tsscjRecord)
               slowMessageList ::= slowMessage
               false
             }
             case _ => {
-              logger.info(s"R1-4 $tsscjRecord  ")
               logger.error(
                 s"""
                    |==================
@@ -332,7 +331,8 @@ object BaseRecordOperator {
                                               tsscjRecords: mutable.Map[String, TsscjRecord]) = {
     val tdrwtUpdateWths = tdrwtUpdateRecords.keySet
     val tdrwtInsertWths = tdrwtInsertRecords.keySet
-    val tsscjWths = tsscjRecords.keySet
+    // tsscjRecords记录的key 是 wth_cjbh
+    val tsscjWths = tsscjRecords.keySet.map(key=>key.split("_")(0))
     // tdrwt insert 与 update wth交集
     val tdrwtMixWths = tdrwtUpdateWths & tdrwtInsertWths
     // tdrwt  update wth独享集
@@ -376,9 +376,9 @@ object BaseRecordOperator {
             val oldValue = tkhxx.getOrElse(tkhxxRecord.jgbz, 0)
             tkhxx.put(tkhxxRecord.jgbz, oldValue + 1)
           }
-          // 实时成交
+          // 实时成交 (wth_cjbh,record)
           case tsscjRecord: TsscjRecord => {
-            tsscjRecords.put(tsscjRecord.wth, tsscjRecord)
+            tsscjRecords.put(s"${tsscjRecord.wth}_${tsscjRecord.cjbh}", tsscjRecord)
           }
           // 资金转入转出
           case tdrzjmxRecord: TdrzjmxRecord => {

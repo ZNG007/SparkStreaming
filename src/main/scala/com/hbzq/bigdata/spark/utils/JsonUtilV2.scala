@@ -92,11 +92,9 @@ object JsonUtilV2 {
       }
       // UPDATE消息
       case "UPDATE" => {
-        val before_jgsm = before.get("JGSM").getOrElse("").trim
-        val after_jgsm = after.get("JGSM").getOrElse("").trim
+        val after_sbjg = after.get("SBJG").getOrElse("").trim
         val wth = before.get("WTH").getOrElse("0")
-        val before_jgsm_list = List("待申报", "申报中")
-        if (after_jgsm.equalsIgnoreCase("已申报") && before_jgsm_list.contains(before_jgsm)) {
+        if ("2".equalsIgnoreCase(after_sbjg)) {
           TdrwtRecord(
             op,
             "",
@@ -156,7 +154,7 @@ object JsonUtilV2 {
     if (!"INSERT".equalsIgnoreCase(op) || after.isEmpty) {
       return null
     }
-    val jgbz = after.get("JGBZ").getOrElse("-1").toInt
+    val jgbz = after.get("KHLB").getOrElse("-1").toInt
     jgbz match {
       case 0 => TkhxxRecord(
         after.get("KHH").getOrElse(""),

@@ -101,7 +101,7 @@ object RealTimeTradeMonitor {
     *
     * @param offsetRanges
     */
-  private def flushKafkaOffsetToDB(offsetRanges: Array[OffsetRange]) = {
+  private def flushKafkaOffsetToDB(offsetRanges: Array[OffsetRange])(implicit session: scalikejdbc.DBSession) = {
     var kafkaOffsets: List[List[Any]] = List()
     offsetRanges.foreach(offsetRange => {
       SQL(ConfigurationManager.getProperty(Constants.KAFKA_MYSQL_INSERT_OFFSET_SQL))
@@ -118,9 +118,9 @@ object RealTimeTradeMonitor {
     * @param tdrzjmx
     * @param timestamp
     */
-  private def flushOtherRealStateToDB(now: Int, tkhxx: mutable.Map[String, Int], tdrzjmx: mutable.Map[String, BigDecimal], timestamp: Timestamp) = {
-    val new_jg_count = tkhxx.getOrElse(TkhxxOperator.GR, 0)
-    val new_gr_count = tkhxx.getOrElse(TkhxxOperator.JG, 0)
+  private def flushOtherRealStateToDB(now: Int, tkhxx: mutable.Map[String, Int], tdrzjmx: mutable.Map[String, BigDecimal], timestamp: Timestamp)(implicit session: scalikejdbc.DBSession) = {
+    val new_gr_count = tkhxx.getOrElse(TkhxxOperator.GR, 0)
+    val new_jg_count = tkhxx.getOrElse(TkhxxOperator.JG, 0)
     val zr_sum = tdrzjmx.getOrElse(TdrzjmxOperator.ZJZR, BigDecimal(0))
     val zc_sum = tdrzjmx.getOrElse(TdrzjmxOperator.ZJZC, BigDecimal(0))
     if (new_jg_count != 0 || new_gr_count != 0 || zr_sum != 0 || zc_sum != 0) {
@@ -141,7 +141,7 @@ object RealTimeTradeMonitor {
     * @param tsscj
     * @param timestamp
     */
-  private def flushTradeRealStateToDB(now: Int, tdrwt: mutable.Map[(String, String), (Int, BigDecimal)], tsscj: mutable.Map[(String, String), (Int, BigDecimal, BigDecimal)], timestamp: Timestamp) = {
+  private def flushTradeRealStateToDB(now: Int, tdrwt: mutable.Map[(String, String), (Int, BigDecimal)], tsscj: mutable.Map[(String, String), (Int, BigDecimal, BigDecimal)], timestamp: Timestamp)(implicit session: scalikejdbc.DBSession) = {
     var nowTradeStates: List[List[Any]] = List()
     if (!tdrwt.isEmpty || !tsscj.isEmpty) {
       val keys = tdrwt.keySet ++ tsscj.keySet;
