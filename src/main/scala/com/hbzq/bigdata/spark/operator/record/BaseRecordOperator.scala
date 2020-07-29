@@ -131,10 +131,14 @@ object BaseRecordOperator {
     classifyAndComputeBaseRecord(records, tdrwtInsertRecords, tdrwtUpdateRecords, tsscjRecords, tkhxx, tdrzjmx, exchangeMapBC)
     //  TDRWT Insert 批量插入HBase
     putTdrwtRecordsToHBase(tdrwtInsertRecords)
+
+
     var jedis: Jedis = null
     try {
       jedis = RedisUtil.getConn()
       val (tdrwtMixWths, tsscjMixWths, hbaseTdrwtReords) = getAllTdrwtFromHBaseOrPartition(tdrwtInsertRecords, tdrwtUpdateRecords, tsscjRecords)
+      // 增加Insert消息里面  sbjg=2
+      computeTdrwtInsertRecord(tdrwtInsertRecords, exchangeMapBC, tdrwt, jedis)
       // 计算tdrwt相关指标
       computeTdrwtUpdateRecord(tdrwtUpdateRecords, tdrwtInsertRecords, tdrwtMixWths, hbaseTdrwtReords, exchangeMapBC, tdrwt, jedis)
       // 计算Tsscj
@@ -145,7 +149,7 @@ object BaseRecordOperator {
       RedisUtil.closeConn(jedis)
     }
     // 往Kafka 发送未关联消息
-    pushMassageToKafka(slowMessageList,kafkaProducerBC)
+    pushMassageToKafka(slowMessageList, kafkaProducerBC)
     res += ("tdrwt" -> tdrwt)
     res += ("tsscj" -> tsscj)
     res += ("tdrzjmx" -> tdrzjmx)
@@ -159,7 +163,7 @@ object BaseRecordOperator {
     * @param slowMessageList
     * @param kafkaProducerBC
     */
-  private def pushMassageToKafka(slowMessageList: List[SlowMessageRecord],kafkaProducerBC: Broadcast[KafkaSink[String, String]]) = {
+  private def pushMassageToKafka(slowMessageList: List[SlowMessageRecord], kafkaProducerBC: Broadcast[KafkaSink[String, String]]) = {
     slowMessageList
       .map(message => JsonUtilV2.parseObjectToJson(message))
       .foreach(message => {
@@ -184,7 +188,7 @@ object BaseRecordOperator {
                          hbaseTdrwtReords: mutable.Map[String, mutable.Map[String, String]],
                          exchangeMapBC: Broadcast[Map[String, BigDecimal]],
                          tsscj: mutable.Map[(String, String), (Int, BigDecimal, BigDecimal)],
-                         jedis: Jedis):List[SlowMessageRecord] = {
+                         jedis: Jedis): List[SlowMessageRecord] = {
     var slowMessageList: List[SlowMessageRecord] = List()
     tsscjRecords.foreach(entry => {
       // key ： wth_cjbh
@@ -253,8 +257,52 @@ object BaseRecordOperator {
     slowMessageList
   }
 
+
   /**
-    * 计算tdrwt相关指标
+    * 计算tdrwt相关指标(insert)
+    *
+    * @param tdrwtInsertRecords
+    * @param exchangeMapBC
+    * @param tdrwt
+    * @param jedis
+    */
+  private def computeTdrwtInsertRecord(
+                                        tdrwtInsertRecords: mutable.Map[String, TdrwtRecord],
+                                        exchangeMapBC: Broadcast[Map[String, BigDecimal]],
+                                        tdrwt: mutable.Map[(String, String), (Int, BigDecimal)],
+                                        jedis: Jedis) = {
+    tdrwtInsertRecords
+      .filter(record => "2".equalsIgnoreCase(record._2.sbjg))
+      .foreach(record => {
+        val tdrwtDetail = record._2
+        val khh = tdrwtDetail.khh
+        val wtjg = tdrwtDetail.wtjg
+        val channel = tdrwtDetail.channel
+        val yyb = tdrwtDetail.yyb
+        val wtsl = tdrwtDetail.wtsl
+        val bz = tdrwtDetail.bz
+        if (!"".equalsIgnoreCase(khh) && khh.length > 4) {
+          val tempKhh = khh.substring(4).toInt
+          // 更新Redis
+          jedis.setbit(s"${TdrwtOperator.TDRWT_KHH_PREFIX}${DateUtil.getFormatNowDate()}_${yyb}_$channel", tempKhh, true)
+        } else {
+          logger.error(
+            s"""
+               |===================
+               |TdrwtInsert Operator khh is invaild....
+               |khh: $khh
+               |===================
+            """.stripMargin)
+        }
+        val exchange = exchangeMapBC.value.getOrElse(bz, BigDecimal(1))
+        val wtje = wtsl * wtjg * exchange
+        val oldValue = tdrwt.getOrElse((yyb, channel), (0, BigDecimal(0)))
+        tdrwt.put((yyb, channel), (oldValue._1 + 1, oldValue._2 + wtje))
+      })
+  }
+
+  /**
+    * 计算tdrwt相关指标(update)
     *
     * @param tdrwtUpdateRecords
     * @param tdrwtInsertRecords
@@ -332,7 +380,7 @@ object BaseRecordOperator {
     val tdrwtUpdateWths = tdrwtUpdateRecords.keySet
     val tdrwtInsertWths = tdrwtInsertRecords.keySet
     // tsscjRecords记录的key 是 wth_cjbh
-    val tsscjWths = tsscjRecords.keySet.map(key=>key.split("_")(0))
+    val tsscjWths = tsscjRecords.keySet.map(key => key.split("_")(0))
     // tdrwt insert 与 update wth交集
     val tdrwtMixWths = tdrwtUpdateWths & tdrwtInsertWths
     // tdrwt  update wth独享集

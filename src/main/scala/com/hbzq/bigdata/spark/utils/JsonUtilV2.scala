@@ -73,6 +73,7 @@ object JsonUtilV2 {
         val bz = after.get("BZ").getOrElse("")
         val wtsl = after.get("WTSL").getOrElse("0")
         val wtjg = BigDecimal(after.get("WTJG").getOrElse("0"))
+        val sbjg = after.get("SBJG").getOrElse("").trim
         val tdrwtRecord = TdrwtRecord(
           op,
           khh,
@@ -82,7 +83,8 @@ object JsonUtilV2 {
           wtgy,
           bz,
           wtsl.toInt,
-          wtjg
+          wtjg,
+          sbjg
         )
         val channel = tdrwtRecord.matchClassify(
           RuleVaildUtil.getClassifyListByRuleName(Constants.RULE_TX_CHANNEL_CLASSIFY),
@@ -93,8 +95,9 @@ object JsonUtilV2 {
       // UPDATE消息
       case "UPDATE" => {
         val after_sbjg = after.get("SBJG").getOrElse("").trim
+        val before_sbjg = before.get("SBJG").getOrElse("").trim
         val wth = before.get("WTH").getOrElse("0")
-        if ("2".equalsIgnoreCase(after_sbjg)) {
+        if ((!"2".equalsIgnoreCase(before_sbjg)) && "2".equalsIgnoreCase(after_sbjg)) {
           TdrwtRecord(
             op,
             "",
@@ -104,7 +107,8 @@ object JsonUtilV2 {
             "",
             "",
             0,
-            BigDecimal(0)
+            BigDecimal(0),
+            after_sbjg
           )
         } else {
           null
