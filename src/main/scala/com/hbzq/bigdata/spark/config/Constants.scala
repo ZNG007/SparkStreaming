@@ -58,13 +58,23 @@ object Constants {
   val HBASE_TDRWT_WTH_TABLE="hbase.tdrwt.wth.table"
   val HBASE_WTH_INFO_FAMILY_COLUMNS="hbase.wth.info.family.columns"
 
+
+  val HBASE_TYWQQ_ROWID_TABLE="hbase.tywqq.rowid.table"
+  val HBASE_ROWID_INFO_FAMILY_COLUMNS="hbase.rowid.info.family.columns"
+
+  val HBASE_Tywsqls_ROWID_TABLE="hbase.tywsqls.rowid.table"
+  val HBASE_ROWID_INFOF_FAMILY_COLUMNS="hbase.rowid.infof.family.columns"
+
   // exchange rate sql
   val DIM_EXCHANGE_RATE_SQL = "hive.dim.exchange.rate.sql"
+  val DIM_TFP_CPDM_SQL="hive.dim.tfp.cpdm.sql"
   val MYSQL_UPSERT_NOW_TRADE_STATE_SQL = "mysql.upsert.now.trade.state.sql"
   val MYSQL_UPSERT_NEXT_TRADE_STATE_SQL = "mysql.upsert.next.trade.state.sql"
   val FLUSH_REDIS_TO_MYSQL_TRADE_STATE_KHH_SQL = "flush.redis.to.mysql.trade.state.khh.sql"
   val MYSQL_UPSERT_OTHER_STATE_SQL = "mysql.upsert.other.state.sql"
+  val MYSQL_UPSERT_OTCYWQQ_STATE_SQL="mysql.upsert.otcywqq.state.sql"
   val MYSQL_NEXT_TRADE_DAY_QUERY_SQL = "mysql.next.trade.day.query.sql"
+  val MYSQL_UPSERT_OTC_STATE_SQL="mysql.upsert.otc.state.sql"
 
   // stop job
   val APP_STOP_HOUR ="app.stop.hour"

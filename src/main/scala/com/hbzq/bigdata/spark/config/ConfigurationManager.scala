@@ -21,8 +21,9 @@ object ConfigurationManager {
   private val prop = new Properties()
 
   /**
-    * 加载额外的配置文件
-    * 通过--file参数指定文件
+  * 加载额外的配置文件
+    * * 通过--file参数指定文件
+    * *
     *
     * @return
     */

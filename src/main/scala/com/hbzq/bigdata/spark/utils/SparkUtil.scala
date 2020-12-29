@@ -5,7 +5,7 @@ import com.hbzq.bigdata.spark.domain._
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.log4j.Logger
-import org.apache.spark.SparkContext
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.streaming.dstream.{DStream, InputDStream}
 import org.apache.spark.streaming.kafka010.{ConsumerStrategies, KafkaUtils}
@@ -20,7 +20,7 @@ import scala.collection.JavaConverters._
   * create on 2020/05/27
   *
   * @author hqbhoho
-  * @version [v1.0] 
+  * @version [v1.0]
   *
   */
 object SparkUtil {
@@ -48,6 +48,10 @@ object SparkUtil {
         classOf[TsscjRecord],
         classOf[TkhxxRecord],
         classOf[TdrzjmxRecord],
+        classOf[TgdzhRecord],
+        classOf[TzjzhRecord],
+        classOf[TywqqRecord],
+        classOf[TFPYwsqlsRecord],
         classOf[ConsumerRecord[String,String]]
       )
     )
@@ -56,6 +60,8 @@ object SparkUtil {
     sparkContext.setLogLevel("WARN")
     (sparkContext, spark, ssc)
   }
+
+
 
   /**
     * 获取kafka 数据流
@@ -90,10 +96,12 @@ object SparkUtil {
     val offsets = MysqlJdbcUtil.executeQuery(ConfigurationManager.getProperty(Constants.KAFKA_MYSQL_QUERY_OFFSET_SQL)
       , List(ConfigurationManager.getProperty(Constants.KAFKA_GROUP_ID)))
     val fromOffsets = offsets.map(rs =>
+      //      生成（(topic,partition),offset）的map
       new TopicPartition(rs.get("topic").get.asInstanceOf[String], rs.get("partition").get.asInstanceOf[Int]) -> rs.get("offset").get.asInstanceOf[Long]).toMap
     if (fromOffsets.isEmpty) {
       getInputStreamFromKafka(ssc, topics, kafkaParams)
     } else {
+      //      取到offset时，通过assign的模式创建kafka数据流，指定消费topic-partitions（assign方式在消费者发生变化时不会自动rebalance）
       KafkaUtils.createDirectStream[String, String](
         ssc,
         PreferConsistent,
@@ -125,5 +133,31 @@ object SparkUtil {
       """.stripMargin)
     res
   }
+  /**
+    * 获取OTC 产品代码表
+    *20201021 新增
+    * @param spark
+    * @return
+    *
+    * */
+  def getTfpCpdmFromHive(spark: SparkSession): Map[String,(String,String)] ={
+    logger.warn("***********************广播**********************************")
+    var res:Map[String,(String,String)]=Map()
+    val cpdm=spark.sql(ConfigurationManager.getProperty(Constants.DIM_TFP_CPDM_SQL))
+      .collectAsList().asScala
+      .foreach(row =>{
+        res += (row.getLong(0).toString.trim.toUpperCase -> (row.getLong(1).toString.trim.toUpperCase,row.getLong(2).toString.trim.toUpperCase))
+      })
+    logger.warn(
+      s"""
+         |=====================
+         |OTC_CPDM
+         |$res
+         =====================
+      """.stripMargin
+    )
+    res
+  }
+
 
 }

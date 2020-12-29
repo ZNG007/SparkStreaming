@@ -18,7 +18,7 @@ trait BaseRecord {
 case class NullRecord() extends BaseRecord
 
 // CUSTOMER.TKHXX
-case class TkhxxRecord(var khh: String, var khrq: Int, var jgbz: String) extends BaseRecord
+case class TkhxxRecord(var khh: String,var khrq: Int, var jgbz: String, var khzt: String,var xhrq: String, var time: String,var op:String) extends BaseRecord
 
 // TDRZJMX
 case class TdrzjmxRecord(var khh: String,
@@ -37,7 +37,44 @@ case class TsscjRecord(var khh: String,
                        var s1: BigDecimal,
                        var cxbz: String,
                        var wth: String,
+                       var gdh:String,
                        var channel: String = "undefine",
                        var version: Int = 0) extends BaseRecord
+
+//OTC TFP_YWSQLS
+case class TFPYwsqlsRecord(var op:String,
+                           var rowid:String,
+                           var wth:String,
+                           var khh:String,
+                           var ywdm:String,
+                           var clzt:String,
+                           var cljg:String,
+                           var cpfl:String,
+                           var ywje:BigDecimal,
+                           var djrq:String,
+                           var cpid:String,
+                           var time:String,
+                           var version: Int = 0
+                          ) extends BaseRecord
+
+case class TgdzhRecord(var khh: String, var gdh: String, var khrq: Int, var gdzt: String, var zhlb: String) extends BaseRecord
+case class TzjzhRecord(var khh: String, var ZJZH: String, var khrq: Int, var zhzt: String ) extends  BaseRecord
+case class TywqqRecord(var op:String,
+                       var rowid:String,
+                       var id: String,
+                       var khh: String,
+                       var sqrq: Int,
+                       var yyb:String,
+                       var clzt: String,
+                       var time: String,
+                       var version: Int = 0
+                      ) extends  BaseRecord
+//case class TywsqlsRecord(var wth: String, var djrq: Int, var ywdm:String, var clzt: String, var cljg:String) extends  BaseRecord
+case class TjjzhRecord(var op:String,
+                       var khh:String,
+                       var jjzh:String,
+                       var khrq: Int,
+                       var zhzt: String
+                      ) extends  BaseRecord
 
 case class SlowMessageRecord(var originTopic: String, var baseRecord: BaseRecord) extends BaseRecord

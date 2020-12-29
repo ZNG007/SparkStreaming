@@ -63,6 +63,7 @@ trait BaseTxRecord extends BaseRecord{
 case class TdrwtRecord(var op:String,var khh: String, var wth: String
                        , var yyb: String, var wtfs: String, var wtgy: String,
                        var bz: String, var wtsl: Int, var wtjg: BigDecimal,var sbjg:String,
+                       var cxbz:String,var jslx:String,var zqlb:String,
                        var channel: String = "qt") extends BaseTxRecord
 
 

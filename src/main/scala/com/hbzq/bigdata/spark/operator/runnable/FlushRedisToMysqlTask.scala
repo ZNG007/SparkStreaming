@@ -61,13 +61,13 @@ class FlushRedisToMysqlTask() extends Runnable {
         }
       }
     }
-    logger.warn(
-      s"""
-         |=========
-         |RealTradeState update to Mysql
-         |$res
-         |=========
-      """.stripMargin)
+//    logger.warn(
+//      s"""
+//         |=========
+//         |RealTradeState update to Mysql
+//         |$res
+//         |=========
+//      """.stripMargin)
 
     MysqlJdbcUtil.executeBatchUpdate(ConfigurationManager.getProperty(Constants.FLUSH_REDIS_TO_MYSQL_TRADE_STATE_KHH_SQL), res)
 

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="HydraSettings">
-    <option name="hydraStorePath" value="E:\scalaProjects\realtime-trade-monitor\.hydra\idea" />
-    <option name="noOfCores" value="2" />
-    <option name="projectRoot" value="E:\scalaProjects\realtime-trade-monitor" />
+    <option name="hydraStorePath" value="E:\realtime-trade-monitor\.hydra\idea" />
+    <option name="noOfCores" value="4" />
+    <option name="projectRoot" value="E:\realtime-trade-monitor" />
     <option name="sourcePartitioner" value="auto" />
   </component>
 </project>

@@ -58,6 +58,7 @@ class TestJson {
       BigDecimal(0),
       BigDecimal(0),
       "123",
+      "123",
       "123")
     record.version = record.version +1
     println(JsonUtilV2.parseObjectToJson( SlowMessageRecord("ffff",record)))

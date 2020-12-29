@@ -1,8 +1,10 @@
 package com.hbzq.bigdata.spark.utils
 
 import java.sql.Timestamp
+import java.text.SimpleDateFormat
 import java.time.{LocalDateTime, ZoneOffset}
 import java.time.format.DateTimeFormatter
+import java.util.Date
 
 import com.hbzq.bigdata.spark.config.{ConfigurationManager, Constants}
 
@@ -62,5 +64,16 @@ object DateUtil {
     MysqlJdbcUtil
       .executeQuery(ConfigurationManager.getProperty(Constants.MYSQL_NEXT_TRADE_DAY_QUERY_SQL), List(now))(0)
       .getOrElse("jyr", 0).asInstanceOf[java.math.BigDecimal].intValue()
+  }
+
+  /**
+   * 时间戳转换为格式时间
+   * @param tm
+   * @return
+   */
+  def tranTimeToString(tm:String) :String={
+    val fm = new SimpleDateFormat("yyyyMMdd")
+    val tim = fm.format(new Date(tm.toLong))
+    tim
   }
 }

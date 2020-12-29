@@ -1,3 +1,0 @@
-HBase
-create_namespace 'trade_monitor'
-create 'trade_monitor:tdrwt_wth', {NAME => 'info', TTL => 86400, BLOOMFILTER => 'ROW', VERSIONS => 1}
